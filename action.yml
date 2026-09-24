@@ -1,0 +1,69 @@
+name: "Self-hosted GitHub Stats Card"
+description: "Render an animated GitHub stats card as an SVG file in your own repo, so your README never depends on a hosted widget"
+author: "Sagargupta16"
+
+branding:
+  icon: "bar-chart-2"
+  color: "blue"
+
+inputs:
+  username:
+    description: "GitHub username to render"
+    required: false
+    default: ${{ github.repository_owner }}
+  token:
+    description: "Token for the GitHub GraphQL API"
+    required: false
+    default: ${{ github.token }}
+  output:
+    description: "Path of the SVG to write, relative to the workspace"
+    required: false
+    default: "assets/github-stats.svg"
+  accent:
+    description: "Hex color for the title and the contribution calendar"
+    required: false
+    default: "#60a5fa"
+  title:
+    description: "Card title; empty means GITHUB | @USERNAME"
+    required: false
+    default: ""
+  languages:
+    description: "Number of top languages to show"
+    required: false
+    default: "6"
+  exclude-repos:
+    description: "Comma-separated repository names to leave out of stars and languages"
+    required: false
+    default: ""
+
+outputs:
+  contributions:
+    description: "Contributions in the last year"
+    value: ${{ steps.card.outputs.contributions }}
+  streak:
+    description: "Current contribution streak in days"
+    value: ${{ steps.card.outputs.streak }}
+  stars:
+    description: "Stars across the counted repositories"
+    value: ${{ steps.card.outputs.stars }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+
+    - name: Render the stats card
+      id: card
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        INPUT_USERNAME: ${{ inputs.username }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_ACCENT: ${{ inputs.accent }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_LANGUAGES: ${{ inputs.languages }}
+        INPUT_EXCLUDE_REPOS: ${{ inputs.exclude-repos }}
+      run: python "${{ github.action_path }}/github_stats_card.py"

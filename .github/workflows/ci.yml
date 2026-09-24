@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # Pinned by hand: Renovate does not read versions inside a `run:` block,
+      # and a ruff release that grows the default ruleset can turn an unchanged
+      # tree red. Quoted because a bare `:all: ` parses as a YAML mapping.
+      - name: Install ruff
+        run: "pip install --only-binary :all: ruff==0.16.6"
+      - name: Lint
+        run: ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.13 is what action.yml installs for consumers, so it must be covered.
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install pytest
+        run: "pip install --only-binary :all: pytest==9.1.1"
+      - name: Test
+        run: pytest -v
+
+  action:
+    # The only job that runs action.yml itself. Lint and test never load it, so
+    # a broken input or output mapping would leave both of them green.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the action from this checkout
+        id: card
+        uses: ./
+        with:
+          # Real data: the live GraphQL API is the action's only data source.
+          username: Sagargupta16
+          token: ${{ github.token }}
+
+      - name: Assert the card exists, parses, and every output resolved
+        env:
+          CONTRIBUTIONS: ${{ steps.card.outputs.contributions }}
+          STREAK: ${{ steps.card.outputs.streak }}
+          STARS: ${{ steps.card.outputs.stars }}
+        run: |
+          set -euo pipefail
+          test -s assets/github-stats.svg
+          python -c 'import sys, xml.dom.minidom; root = xml.dom.minidom.parse(sys.argv[1]).documentElement; sys.exit(root.tagName != "svg")' assets/github-stats.svg
+          for pair in "contributions=$CONTRIBUTIONS" "streak=$STREAK" "stars=$STARS"; do
+            case "${pair#*=}" in
+              ''|*[!0-9]*) echo "::error::output ${pair%%=*} is not a number: '${pair#*=}'"; exit 1 ;;
+            esac
+          done
+          echo "Card parses; contributions=$CONTRIBUTIONS streak=$STREAK stars=$STARS"
