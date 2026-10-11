@@ -12,7 +12,7 @@
 
 Composite GitHub Action that renders a self-hosted, animated GitHub stats card (one SVG) into the caller's repo, so a profile README never depends on a hosted widget.
 
-Built 2026-09-25 by extracting `render_github` from [`brand/Sagargupta16/scripts/render-svgs.py`](../../brand/Sagargupta16/scripts/render-svgs.py) and generalizing it. To be published as `Sagargupta16/github-stats-card-action@v1` under the Marketplace name "Self-hosted GitHub Stats Card" (the `github-stats-card` slug was already taken).
+Built 2026-09-25 by extracting `render_github` from [`brand/Sagargupta16/scripts/render-svgs.py`](../../brand/Sagargupta16/scripts/render-svgs.py) and generalizing it. Published as `Sagargupta16/github-stats-card-action@v1` under the Marketplace name "Self-hosted GitHub Stats Card" (the `github-stats-card` slug was already taken). Releases: v1.0.0 (2026-09-25), v1.1.0 (2026-10-11). A release is: tag `vX.Y.Z` on the merge commit, move `v1` to it, publish the GitHub release, then re-pin `Sagargupta16/Sagargupta16/.github/workflows/render-svgs.yml`, which pins a full SHA.
 
 ## Stack
 
