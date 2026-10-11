@@ -37,6 +37,12 @@ DEFAULT_LANGUAGES = "6"
 # Lightness of BLUE relative to BLUE_LIGHT; reused to derive the deep shade of
 # any other accent.
 DEEP_LIGHTNESS = 0.79
+# WCAG 2.2 minimum contrast on the card: 4.5:1 for small text (1.4.3), 3:1 for
+# graphics such as calendar cells and language swatches (1.4.11).
+TEXT_MIN = 4.5
+GRAPHIC_MIN = 3.0
+# Empty calendar days: a faint tint that reads as texture, not as data.
+EMPTY_DAY = "rgba(255,255,255,0.05)"
 UNKNOWN_LANGUAGE_COLOR = "#8b949e"
 HEX_COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 
@@ -154,14 +160,74 @@ def level(count: int, cuts: list[int]) -> int:
     return 0 if count == 0 else 1 + sum(1 for c in cuts if count > c)
 
 
+def channels(color: str) -> tuple[int, int, int]:
+    r, g, b = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+    return r, g, b
+
+
+def luminance(color: str) -> float:
+    """WCAG 2.2 relative luminance of a #rrggbb color, 0 (black) to 1 (white)."""
+
+    def linear(value: int) -> float:
+        c = value / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (linear(v) for v in channels(color))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(color: str, bg: str = BG) -> float:
+    """WCAG 2.2 contrast ratio of two #rrggbb colors, 1 to 21."""
+    a, b = luminance(color), luminance(bg)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+def hls_hex(hue: float, lightness: float, saturation: float) -> str:
+    rgb = colorsys.hls_to_rgb(hue, min(lightness, 1.0), saturation)
+    return "#" + "".join(f"{round(c * 255):02x}" for c in rgb)
+
+
+def ensure_contrast(color: str, minimum: float) -> str:
+    """color when it reaches minimum:1 on the card, else the nearest lighter shade
+    of the same hue that does. The card is near-black, so only lighter shades can
+    pass, and white (19:1) always does."""
+    if contrast(color) >= minimum:
+        return color
+    hue, lightness, saturation = colorsys.rgb_to_hls(
+        *(v / 255 for v in channels(color))
+    )
+    shades = (
+        hls_hex(hue, lightness + step / 1000, saturation) for step in range(1, 1001)
+    )
+    return next(shade for shade in shades if contrast(shade) >= minimum)
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """The solid #rrggbb t of the way from color a to color b."""
+    pairs = zip(channels(a), channels(b), strict=True)
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in pairs)
+
+
 def deep_shade(accent: str) -> str:
-    """Darker partner of the accent, used for the three lower calendar levels."""
+    """Darker partner of the accent, where the calendar's quietest level starts."""
     if accent == BLUE_LIGHT:
         return BLUE  # the original card's hand-picked pair, kept exact
     r, g, b = (int(accent[i : i + 2], 16) / 255 for i in (1, 3, 5))
     hue, lightness, saturation = colorsys.rgb_to_hls(r, g, b)
     rgb = colorsys.hls_to_rgb(hue, lightness * DEEP_LIGHTNESS, saturation)
     return "#" + "".join(f"{round(c * 255):02x}" for c in rgb)
+
+
+def calendar_shades(accent: str) -> list[str]:
+    """Fills for calendar levels 0 to 4: the empty-day tint, then four solid shades
+    from quiet to busy that each reach 3:1 on the card. The quietest starts from
+    the deep shade at 60% over the card (the old middle level) and the busiest is
+    the accent, held to 4.5:1 like the title so a dark accent still leaves room
+    above the 3:1 floor; the two between are spaced evenly from one to the other."""
+    peak = ensure_contrast(accent, TEXT_MIN)
+    low = ensure_contrast(mix(BG, deep_shade(peak), 0.6), GRAPHIC_MIN)
+    mids = [ensure_contrast(mix(low, peak, t), GRAPHIC_MIN) for t in (1 / 3, 2 / 3)]
+    return [EMPTY_DAY, low, *mids, peak]
 
 
 def svg_open(w: int, h: int, label: str) -> str:
@@ -173,7 +239,14 @@ def svg_open(w: int, h: int, label: str) -> str:
 
 def render_card(stats: dict, username: str, title: str, accent: str) -> str:
     cal = stats["calendar"]
-    languages = stats["languages"]
+    # linguist colors are data: one too dark for the card moves to the nearest
+    # lighter shade that reaches 3:1 rather than being dropped
+    languages = [
+        [name, pct, ensure_contrast(color, GRAPHIC_MIN)]
+        for name, pct, color in stats["languages"]
+    ]
+    # the accent is also the title, which is small text
+    accent = ensure_contrast(accent, TEXT_MIN)
     legend_rows = (len(languages) + 2) // 3  # three languages per legend row
     w, h = 840, 300 + 20 * max(2, legend_rows)
     tiles = [
@@ -213,8 +286,7 @@ def render_card(stats: dict, username: str, title: str, accent: str) -> str:
     # user's own non-zero days
     nonzero = sorted(c for week in cal for c in week if c)
     cuts = [nonzero[len(nonzero) * q // 4] for q in (1, 2, 3)] if nonzero else [0, 0, 0]
-    deep = deep_shade(accent)
-    shades = ["rgba(255,255,255,0.05)", f"{deep}55", f"{deep}99", f"{deep}dd", accent]
+    shades = calendar_shades(accent)
     cell, gap, gx, gy = 9, 2.6, 24, 128
     for wi, week in enumerate(cal):
         for di, count in enumerate(week):

@@ -178,23 +178,95 @@ def test_injected_markup_stays_text() -> None:
     assert parse(svg).getElementsByTagName("script") == []
 
 
-def test_default_accent_keeps_the_original_shades() -> None:
+def test_default_accent_keeps_the_blue_family() -> None:
     svg = card.render_card(STATS, "octocat", "t", card.BLUE_LIGHT)
 
-    for shade in ("#2563eb55", "#2563eb99", "#2563ebdd"):
-        assert f'fill="{shade}"' in svg
+    shades = card.calendar_shades(card.BLUE_LIGHT)
+    assert shades == [card.EMPTY_DAY, "#2459c6", "#3872d7", "#4c8ce9", "#60a5fa"]
+    for shade in shades:
+        assert f'rx="2" fill="{shade}"' in svg
     assert 'fill="#60a5fa" font-size="10"' in svg
 
 
 def test_custom_accent_drives_title_and_calendar() -> None:
     svg = card.render_card(STATS, "octocat", "t", "#f59e0b")
 
-    deep = card.deep_shade("#f59e0b")
     assert 'fill="#f59e0b" font-size="10"' in svg
-    assert 'rx="2" fill="#f59e0b"' in svg
-    assert f'fill="{deep}55"' in svg
+    for shade in card.calendar_shades("#f59e0b"):
+        assert f'rx="2" fill="{shade}"' in svg
+    assert card.calendar_shades("#f59e0b")[-1] == "#f59e0b"
     assert "#2563eb" not in svg
     assert "#60a5fa" not in svg
+
+
+# ---------------------------------------------------------------- contrast
+
+ACCENTS = ["#60a5fa", "#f59e0b", "#22c55e", "#ef4444", "#1e3a8a", "#000000", "#ffffff"]
+# linguist colors that fail 3:1 on the card (CSS, Assembly, Dockerfile, black)
+DARK_LANGUAGES = [
+    ["CSS", 40.0, "#663399"],
+    ["Assembly", 30.0, "#6E4C13"],
+    ["Dockerfile", 20.0, "#384d54"],
+    ["Mystery", 10.0, "#000000"],
+]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "ratio"),
+    [
+        ("#ffffff", "#000000", 21.0),
+        ("#000000", "#000000", 1.0),
+        ("#777777", "#ffffff", 4.48),
+    ],
+)
+def test_contrast_matches_wcag_reference_values(a: str, b: str, ratio: float) -> None:
+    assert card.contrast(a, b) == pytest.approx(ratio, abs=0.005)
+
+
+def test_ensure_contrast_keeps_a_color_that_passes() -> None:
+    assert card.ensure_contrast("#3572A5", card.GRAPHIC_MIN) == "#3572A5"
+
+
+def test_ensure_contrast_lifts_a_failing_color_to_the_nearest_lighter_shade() -> None:
+    lifted = card.ensure_contrast("#663399", card.GRAPHIC_MIN)
+
+    assert card.contrast("#663399") < card.GRAPHIC_MIN <= card.contrast(lifted)
+    assert lifted == "#7d3fbc"  # same purple hue, 0.06 lighter
+
+
+@pytest.mark.parametrize("accent", ACCENTS)
+def test_every_calendar_level_reaches_3_to_1_and_busier_is_brighter(
+    accent: str,
+) -> None:
+    empty, *levels = card.calendar_shades(accent)
+
+    assert empty == card.EMPTY_DAY
+    assert all(card.contrast(shade) >= card.GRAPHIC_MIN for shade in levels)
+    lums = [card.luminance(shade) for shade in levels]
+    assert lums == sorted(lums)
+    assert len(set(levels)) == 4
+
+
+@pytest.mark.parametrize("accent", ACCENTS)
+def test_every_solid_mark_on_the_card_reaches_3_to_1(accent: str) -> None:
+    stats = {**STATS, "languages": STATS["languages"] + DARK_LANGUAGES}
+
+    root = parse(card.render_card(stats, "octocat", "t", accent))
+
+    marks = root.getElementsByTagName("rect") + root.getElementsByTagName("circle")
+    fills = {m.getAttribute("fill") for m in marks} - {"", card.BG, card.CARD}
+    assert fills - {card.EMPTY_DAY}
+    for fill in fills - {card.EMPTY_DAY}:
+        assert card.HEX_COLOR.fullmatch(fill), fill
+        assert card.contrast(fill) >= card.GRAPHIC_MIN, fill
+
+
+@pytest.mark.parametrize("accent", ACCENTS)
+def test_title_reaches_4_5_to_1_for_any_accent(accent: str) -> None:
+    root = parse(card.render_card(STATS, "octocat", "t", accent))
+
+    title = root.getElementsByTagName("text")[0].getAttribute("fill")
+    assert card.contrast(title) >= card.TEXT_MIN
 
 
 def test_deep_shade_is_a_darker_hex_color() -> None:
