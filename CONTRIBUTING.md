@@ -37,6 +37,7 @@ Without `INPUT_OUTPUT` the script writes `assets/github-stats.svg`. Do not commi
 - Composite outputs need `value: ${{ steps.card.outputs.<name> }}` plus `id: card` on the step that writes `$GITHUB_OUTPUT`. Without both, an output silently resolves to an empty string.
 - Keep the script standard library only. Any third-party import breaks every consumer.
 - The SVG stays self-contained (no scripts, external fonts or images; CSS and SMIL only), keeps `role="img"` and `aria-label`, and passes every user- or API-supplied string through `html.escape`.
+- Text and data colors meet WCAG contrast on the card background: 4.5:1 for small text, 3:1 for calendar cells and language swatches. Pass any new user- or API-supplied color through `ensure_contrast`, and keep the contrast tests green.
 - `fetch` checks `ALLOWED_HOSTS` (`https://api.github.com/` only) before `urlopen`. Keep the check and the `# nosec B310` on that line, and never print the token.
 - There is no `ruff.toml` on purpose: the tree passes ruff's full default ruleset. The script has no shebang on purpose too, since a shebang without mode 100755 in git fails ruff `EXE001`.
 - `ruff` and `pytest` pins in `ci.yml` are bumped by hand. Renovate does not read versions inside `run:` blocks.

@@ -39,7 +39,7 @@ uvx ruff@0.16.6 check .
 uv run --no-project --with pytest==9.1.1 pytest -v
 ```
 
-`test_github_stats_card.py` never touches the network: `serve()` replaces `fetch` with canned GraphQL replies, and the allowlist test stubs `urlopen`. It covers streaks (including an empty today), level cuts, XML validity via `xml.dom.minidom`, escaping of `<&"` in usernames, titles and language names, pagination, exclude-repos, accent handling, card height, the keep-or-exit fallback, input validation, and that the token never reaches stdout or stderr. One test parses the committed `examples/github-stats.svg`.
+`test_github_stats_card.py` never touches the network: `serve()` replaces `fetch` with canned GraphQL replies, and the allowlist test stubs `urlopen`. It covers streaks (including an empty today), level cuts, contrast (every calendar level, language swatch and the title against the card, for light, dark and mid accents), XML validity via `xml.dom.minidom`, escaping of `<&"` in usernames, titles and language names, pagination, exclude-repos, accent handling, card height, the keep-or-exit fallback, input validation, and that the token never reaches stdout or stderr. One test parses the committed `examples/github-stats.svg`.
 
 `.github/workflows/ci.yml` runs three jobs on every push to `main` and every PR: `lint` (ruff, 3.13), `test` (pytest on 3.12, 3.13, 3.14), and `action`, the only job that loads `action.yml`. It runs `uses: ./` for Sagargupta16 with `${{ github.token }}`, then asserts the SVG exists, parses, and all three outputs are numbers.
 
@@ -60,8 +60,10 @@ uv run --no-project --with pytest==9.1.1 pytest -v
 
 - Adding an input touches three places in sync: `action.yml` `inputs`, the `env` block of the `card` step (`INPUT_<NAME>`, hyphens become underscores), and `read_input("<NAME>")` in the script. The token is the exception: it arrives as `GITHUB_TOKEN`.
 - Composite outputs need `value: ${{ steps.card.outputs.<name> }}` plus `id: card` on the step that writes `$GITHUB_OUTPUT`. A description alone silently resolves to an empty string, which is the bug credly-badge-readme-action shipped in its v1.0.0.
-- The default accent is a special case on purpose: `deep_shade("#60a5fa")` returns the original hand-picked `#2563eb`, so the default card stays identical to the profile card. Any other accent derives its deep shade by scaling HLS lightness by `DEEP_LIGHTNESS` (0.79).
-- Default output was verified identical to `render_github` in render-svgs.py on the same data (2026-09-25), apart from the aria-label wording, the title spacing (`GITHUB | @X` vs `GITHUB  |  @X`, which SVG collapses to the same thing), delay classes emitted per week instead of a fixed 54, and one float artifact rounded. The two copies are independent; port design changes between them by hand.
+- The default accent is a special case on purpose: `deep_shade("#60a5fa")` returns the original hand-picked `#2563eb`. Any other accent derives its deep shade by scaling HLS lightness by `DEEP_LIGHTNESS` (0.79).
+- Calendar levels come from `calendar_shades(accent)`: the empty-day tint, then four solid shades from the deep shade at 60% over `BG` (lifted to 3:1) up to the accent (held to 4.5:1), the two middle ones mixed evenly between. Translucent level fills were the 1.0.0 contrast bug (`#2563eb99` was 2.05:1); keep the levels solid. Default ramp: `#2459c6`, `#3872d7`, `#4c8ce9`, `#60a5fa` (3.03 to 7.53:1).
+- `ensure_contrast` only ever lightens: on the near-black `BG` a darker shade cannot reach 3:1, and white (19:1) always passes. Language colors and the accent go through it in `render_card`, so `fetch_stats` still returns linguist's raw colors.
+- 1.0.0's default output was verified identical to `render_github` in render-svgs.py (2026-09-25). Since 1.1.0 the calendar shades and any too-dark language color differ on purpose. The profile repo now runs this action (pinned by SHA in its `render-svgs.yml`) instead of keeping its own copy, so a release only reaches the profile when that pin moves.
 - `REPOS` filters `privacy:PUBLIC`, so stars and languages come out the same whichever token runs it. Measured 2026-09-25: a `gh auth token` run gave 272 stars over 58 repos, matching the profile workflow's `GITHUB_TOKEN` run, while the same user token without the filter sees 65 repos and 278 stars (7 private repos).
 - Card height is `300 + 20 * max(2, legend rows)`: 340 for up to six languages, then 20 px more per extra row of three.
 - No shebang on purpose: the action runs `python <script>`, and a shebang without mode 100755 in git fails ruff's `EXE001` in CI.
@@ -74,6 +76,7 @@ uv run --no-project --with pytest==9.1.1 pytest -v
 
 - Keep the script stdlib-only. `action.yml` has no install step, so any third-party import breaks every consumer.
 - The SVG stays self-contained (no scripts, external fonts or images; CSS and SMIL only), keeps `role="img"` and `aria-label`, and passes every user- or API-supplied string through `html.escape`.
+- Text, calendar levels and language swatches meet WCAG contrast on `BG` (the empty-day tint and the tile borders are decorative and exempt): `TEXT_MIN` (4.5:1) for small text, `GRAPHIC_MIN` (3:1) for cells and swatches. Route any new user- or API-supplied color through `ensure_contrast`. To check a render: `python ../svg-forge/skills/animated-svg/scripts/validate_svg.py <file> --strict-contrast --theme dark` must report 0 errors.
 - `fetch` checks `ALLOWED_HOSTS` (`https://api.github.com/` only) before `urlopen`; keep the check and the `# nosec B310` on the urlopen line.
 
 ## Usage

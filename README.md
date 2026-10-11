@@ -4,7 +4,7 @@ A GitHub Action that renders an animated GitHub stats card as an SVG file in you
 
 <img src="examples/github-stats.svg" alt="GitHub stats card for @Sagargupta16" width="100%">
 
-Live data for [@Sagargupta16](https://github.com/Sagargupta16), rendered on 2026-09-25.
+Live data for [@Sagargupta16](https://github.com/Sagargupta16), rendered on 2026-10-11.
 
 Public stats-widget hosts serve everyone from shared API quotas, and when a quota runs out your README shows an error instead of your stats. This action renders the card in your own workflow, with your own token, and commits a plain file that GitHub serves like any other file in your repo.
 
@@ -59,7 +59,7 @@ The card is 840 px wide and scales down with `width="100%"`.
 | `username` | `${{ github.repository_owner }}` | GitHub user to render |
 | `token` | `${{ github.token }}` | Token for the GraphQL API. The default is enough; see [Limits](#limits) |
 | `output` | `assets/github-stats.svg` | Path of the SVG, relative to the workspace. Missing folders are created |
-| `accent` | `#60a5fa` | Hex color (`#rrggbb` or `rrggbb`) for the title and the contribution calendar. Quote it in YAML, where `#` starts a comment: `accent: "#f59e0b"` |
+| `accent` | `#60a5fa` | Hex color (`#rrggbb` or `rrggbb`) for the title and the contribution calendar. A color too dark to read on the card is lightened to the nearest shade that reaches 4.5:1. Quote it in YAML, where `#` starts a comment: `accent: "#f59e0b"` |
 | `title` | `GITHUB \| @<USERNAME>` | Card title, rendered as given |
 | `languages` | `6` | How many top languages to show, three per legend row. Past six, the card grows 20 px per extra row |
 | `exclude-repos` | empty | Comma-separated repository names (`name` or `owner/name`, case-insensitive) left out of stars and languages |
@@ -83,6 +83,7 @@ All three are empty when the API call failed and the previous card was kept.
 Details:
 
 - Calendar shades are quartiles of your own non-zero days, so the brightest cells are your busiest quarter of active days rather than a fixed count.
+- Text and data colors meet WCAG contrast on the card: text reaches 4.5:1, and each calendar level and language swatch reaches 3:1 (WCAG 1.4.11). The four calendar levels are solid shades from a deep blue (or a deep shade of your accent) up to the accent; empty days are a faint tint. A language color from GitHub that is too dark for the card, such as CSS purple, is drawn at the nearest lighter shade of the same hue.
 - When today has no contributions yet, the streak counts back from yesterday, so an early run does not reset it.
 - If the API call fails and `output` already exists, the action keeps the old card, prints a warning and exits 0, so an outage never blanks your README. If there is no card yet, it exits 1.
 - The SVG is self-contained: no scripts, no external fonts or images, CSS and SMIL animation only. Every string you pass in and every name from the API is HTML-escaped.
