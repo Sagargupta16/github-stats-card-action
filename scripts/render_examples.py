@@ -2,12 +2,12 @@
 
     python scripts/render_examples.py            # write every example SVG
     python scripts/render_examples.py --check    # exit 1 if any committed SVG is stale
-    GITHUB_TOKEN=<token> python scripts/render_examples.py --refresh   # new snapshot first
+    GITHUB_TOKEN=<token> python scripts/render_examples.py --refresh USERNAME   # new snapshot first
 
 The snapshot (examples/stats-snapshot.json) is the stats dict fetch_stats returned
 for one real user on one day, so every example renders offline, needs no token,
-and comes out byte-identical on every machine. That doubles as a demo mode: point
-SNAPSHOT at your own JSON to preview a card without calling the API.
+and comes out byte-identical on every machine. To preview your own card, run
+--refresh with your username, which overwrites the snapshot and re-renders.
 """
 
 from __future__ import annotations
