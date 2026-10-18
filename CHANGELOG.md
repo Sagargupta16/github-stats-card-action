@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-18
+
+Themes and a compact phone layout. With no new inputs set, the card is
+byte-identical to 1.1.x (checked against 1.1.0 renders for four accents).
+
+### Added
+
+- `theme` input with six presets: `dark` (default), `dim`, `light`, `dracula`, `nord` and `solarized-light`. Each preset's text colors, calendar levels and language swatches go through the contrast pass on that theme's own background and tiles, so every preset meets 4.5:1 for text and 3:1 for graphics. All 14 example SVGs report 0 errors under svg-forge's `validate_svg.py --strict-contrast`.
+- `layout` input: `wide` (default, 840 px) or `compact` (400 px): six tiles in a 3 by 2 grid with the streak as the sixth, the last 26 weeks of the calendar, a two-column language legend, and no text under 9 px. Drawn 360 px wide, its smallest text is 8.1 px on screen against 3.4 px for the wide card.
+- `examples/gallery/`: every theme in both layouts plus one custom accent, rendered offline from `examples/stats-snapshot.json` by `scripts/render_examples.py` (`--check` to verify, `--refresh <user>` to fetch a new snapshot). A test fails if a committed example drifts from the code.
+- `scripts/measure.py`: card size, SVG bytes, on-screen text size at 360 px, render time and (with `--live`) GraphQL requests per run. Its results are in the README "Measured" section.
+- `scripts/screenshot_phone.py` and `docs/phone-wide-vs-compact.webp`: the wide and compact cards in a 375 px phone viewport.
+- CI runs the action a second time with `theme: light` and `layout: compact` and asserts the card is 400 px wide on the light background.
+
+### Changed
+
+- `accent` now defaults to empty, meaning the theme's accent. For the default `dark` theme that is still `#60a5fa`.
+- `ensure_contrast` takes the background to measure against and darkens on a light background instead of lightening.
+
+### Documentation
+
+- README: themes and layouts gallery, a multi-variant workflow, a `<picture>` embed that picks the compact or light card by screen width and color scheme, the Measured table, and Limits lines for the compact calendar window.
+
 ## [1.1.1] - 2026-10-18
 
 Docs and CI only; `action.yml` and the script are unchanged, so the card renders
@@ -47,6 +70,7 @@ Initial release. The card design comes from the stats card on
 - Self-contained SVG (no scripts, external fonts or images), with every user-supplied string HTML-escaped.
 - CI: ruff, pytest on Python 3.12, 3.13 and 3.14, and a job that runs `action.yml` against live data.
 
+[1.2.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.0.0
