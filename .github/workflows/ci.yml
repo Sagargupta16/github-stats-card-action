@@ -20,7 +20,7 @@ jobs:
       # and a ruff release that grows the default ruleset can turn an unchanged
       # tree red. Quoted because a bare `:all: ` parses as a YAML mapping.
       - name: Install ruff
-        run: "pip install --only-binary :all: ruff==0.16.6"
+        run: "pip install --only-binary :all: ruff==0.17.1"
       - name: Lint
         run: ruff check .
 

@@ -35,7 +35,7 @@ The README preview is regenerated the same way with `INPUT_OUTPUT=examples/githu
 ## Test
 
 ```
-uvx ruff@0.16.6 check .
+uvx ruff@0.17.1 check .
 uv run --no-project --with pytest==9.1.1 pytest -v
 ```
 
@@ -43,7 +43,7 @@ uv run --no-project --with pytest==9.1.1 pytest -v
 
 `.github/workflows/ci.yml` runs three jobs on every push to `main` and every PR: `lint` (ruff, 3.13), `test` (pytest on 3.12, 3.13, 3.14), and `action`, the only job that loads `action.yml`. It runs `uses: ./` for Sagargupta16 with `${{ github.token }}`, then asserts the SVG exists, parses, and all three outputs are numbers.
 
-`ruff==0.16.6` and `pytest==9.1.1` are pinned inline in `ci.yml` because Renovate does not read `run:` text; bump them by hand. There is deliberately no `ruff.toml`: the tree passes ruff's full default ruleset.
+`ruff==0.17.1` and `pytest==9.1.1` are pinned inline in `ci.yml` because Renovate does not read `run:` text; bump them by hand. There is deliberately no `ruff.toml`: the tree passes ruff's full default ruleset.
 
 ## Entry points
 
