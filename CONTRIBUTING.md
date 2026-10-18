@@ -27,11 +27,20 @@ To render a card by hand, pass a token inline and never echo it:
 GITHUB_TOKEN=$(gh auth token) INPUT_USERNAME=<login> INPUT_OUTPUT=card.svg python github_stats_card.py
 ```
 
-Without `INPUT_OUTPUT` the script writes `assets/github-stats.svg`. Do not commit either file. If your change alters the card, regenerate the README preview with `INPUT_OUTPUT=examples/github-stats.svg` and update the render date under the preview in `README.md`.
+Without `INPUT_OUTPUT` the script writes `assets/github-stats.svg`. Do not commit either file. Add `INPUT_THEME=light` or `INPUT_LAYOUT=compact` to try the other variants.
+
+If your change alters the card, regenerate the README preview and the gallery. They render offline from the committed `examples/stats-snapshot.json`, so no token is needed:
+
+```bash
+python scripts/render_examples.py
+```
+
+A test fails when a committed example differs from what the code renders. If the change affects size, legibility or render time, rerun `python scripts/measure.py` and update the README "Measured" table.
 
 ## Conventions
 
-- Tests live in `test_github_stats_card.py` at the repo root and never touch the network: `serve()` replaces `fetch` with canned GraphQL replies. One test parses the committed `examples/github-stats.svg`.
+- Tests live in `test_github_stats_card.py` at the repo root and never touch the network: `serve()` replaces `fetch` with canned GraphQL replies. One test checks every committed example against `scripts/render_examples.py`.
+- A new theme is one `Theme` entry in `THEMES`. The parametrized contrast tests pick it up; regenerate the gallery and add it to the README table.
 - A new input touches three places in sync: `inputs` in `action.yml`, the `env` block of the `card` step (`INPUT_<NAME>`, hyphens become underscores), and `read_input("<NAME>")` in the script. The token is the exception: it arrives as `GITHUB_TOKEN`.
 - The README Inputs and Outputs tables must match `action.yml`.
 - Composite outputs need `value: ${{ steps.card.outputs.<name> }}` plus `id: card` on the step that writes `$GITHUB_OUTPUT`. Without both, an output silently resolves to an empty string.
