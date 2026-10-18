@@ -16,6 +16,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -29,6 +30,8 @@ SNAPSHOT = EXAMPLES / "stats-snapshot.json"
 GALLERY = EXAMPLES / "gallery"
 # one custom accent next to the presets, to show the contrast pass on a user color
 CUSTOM_ACCENT = "#f59e0b"
+# GitHub's login rule: 1 to 39 letters, digits or single inner hyphens
+GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 
 
 def load_snapshot(path: Path = SNAPSHOT) -> dict:
@@ -53,6 +56,8 @@ def render_all(snapshot: dict) -> dict[Path, str]:
 
 
 def refresh(username: str) -> None:
+    if not GITHUB_LOGIN.fullmatch(username):
+        raise SystemExit(f"--refresh: {username!r} is not a GitHub username")
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if not token:
         raise SystemExit("--refresh needs GITHUB_TOKEN")
