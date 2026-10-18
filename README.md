@@ -133,11 +133,11 @@ Details:
 
 ## Design decisions
 
-- **Composite action, standard library only.** There is no Docker image to pull, no `node_modules` or bundled `dist/` to commit, and no install step, so a third-party release can never break a consumer's run. The whole action is `action.yml` plus one script.
+- **Composite action, standard library only.** There is no Docker image to pull, no `node_modules` or bundled `dist/` to commit, and no package install, so no PyPI or npm release can break a consumer's run. The whole action is `action.yml` plus one script.
 - **A committed file instead of a hosted endpoint.** A README view never reaches the GitHub API. Each run costs one GraphQL request, plus one more per extra 100 repositories.
 - **One allowed host.** `fetch` refuses any URL outside `https://api.github.com/` before it opens a connection, so the token can only go to GitHub.
 - **Keep the old card or exit.** An API error or a mistyped username leaves the existing card in place with a warning and exit 0. A first run with nothing to keep exits 1, so a broken setup is visible.
-- **Quartile shading.** Calendar levels are cut at the quartiles of your own non-zero days, so the brightest level is always your busiest quarter of active days, whether a busy day for you means 3 contributions or 30. Fixed thresholds would leave a quiet profile all one shade.
+- **Quartile shading.** Calendar levels are cut at the quartiles of your own non-zero days, so the brightest level marks your busiest quarter of active days (ties collapse levels together), whether a busy day for you means 3 contributions or 30. Fixed thresholds would leave a quiet profile all one shade.
 - **Contrast floors, not hand-picked colors.** The accent and every language color go through `ensure_contrast`, which raises a color's lightness, keeping its hue, until it reaches 4.5:1 for text or 3:1 for graphics. Any accent and any color GitHub returns stay readable.
 
 ## Limits
