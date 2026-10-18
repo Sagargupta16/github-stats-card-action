@@ -217,7 +217,7 @@ Details:
 - github.com only; GitHub Enterprise Server is not supported.
 - The card names its fonts with system fallbacks instead of embedding them, so text widths vary slightly between viewers.
 - The wide card is a fixed 840 px layout that scales down as a whole. Shown 360 px wide, its smallest text is 3.4 px on screen, which a phone cannot show legibly. Use `layout: compact` (8.1 px at the same width) for phones, through the `<picture>` pattern in [Embed](#embed).
-- The compact card shows the last 26 weeks of the calendar, and its shading is cut at the quartiles of those weeks. The longest streak and active days still cover the full year, as its `/ YEAR` label says.
+- The compact card shows the last 26 weeks of the calendar, and its shading is cut at the quartiles of those weeks. The longest streak and active days still cover the full year, as its `/ YEAR` label says, and so does the `CONTRIBUTIONS` tile: it is the same last-year total as on the wide card, not a 26 week count.
 - The action runs `actions/setup-python` with Python 3.13 in your job, and that Python stays first on `PATH` for the steps after it. If a later step needs another version, give it its own `setup-python` step.
 
 ## License
