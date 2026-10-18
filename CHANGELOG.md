@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-18
+
+Docs and CI only; `action.yml` and the script are unchanged, so the card renders
+exactly as in 1.1.0.
+
+### Changed
+
+- CI lints with ruff 0.17.1 (was 0.16.6). The tree passes the new release's default ruleset unchanged.
+
+### Documentation
+
+- README: CI, release, Marketplace and license badges, and a link to the Marketplace listing.
+- README: a "Why not a hosted widget" comparison, a mermaid diagram of the pipeline under "How it works", and a "Design decisions" section.
+- README: a note on pinning the action to a full commit SHA.
+- README Limits: the fixed 840 px layout gets hard to read at phone widths, and the action leaves Python 3.13 first on `PATH` for later steps in your job.
+
 ## [1.1.0] - 2026-10-11
 
 Text, calendar levels and language swatches now meet WCAG contrast on the card
@@ -31,5 +47,6 @@ Initial release. The card design comes from the stats card on
 - Self-contained SVG (no scripts, external fonts or images), with every user-supplied string HTML-escaped.
 - CI: ruff, pytest on Python 3.12, 3.13 and 3.14, and a job that runs `action.yml` against live data.
 
+[1.1.1]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.0.0
