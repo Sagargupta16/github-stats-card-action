@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import urllib.error
 import xml.dom.minidom
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -89,7 +91,7 @@ def action_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, P
     monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
     monkeypatch.setenv("INPUT_USERNAME", "octocat")
     monkeypatch.setenv("INPUT_OUTPUT", str(output))
-    for name in ("ACCENT", "TITLE", "LANGUAGES", "EXCLUDE_REPOS"):
+    for name in ("ACCENT", "TITLE", "LANGUAGES", "EXCLUDE_REPOS", "THEME", "LAYOUT"):
         monkeypatch.delenv(f"INPUT_{name}", raising=False)
     return output, github_output
 
@@ -489,6 +491,8 @@ def test_main_exits_1_when_the_api_fails_and_there_is_no_card(
         ("LANGUAGES", "six"),
         ("LANGUAGES", "-1"),
         ("USERNAME", ""),
+        ("THEME", "solarized"),
+        ("LAYOUT", "tall"),
     ],
 )
 def test_main_rejects_bad_inputs_before_calling_the_api(
@@ -553,7 +557,150 @@ def test_main_never_prints_the_token(
     assert "test-token-value" not in captured.out + captured.err
 
 
+def test_main_renders_the_theme_and_layout_inputs(
+    action_env: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _ = action_env
+    monkeypatch.setenv("INPUT_THEME", "Light")
+    monkeypatch.setenv("INPUT_LAYOUT", "compact")
+    serve(monkeypatch, reply([]))
+
+    card.main()
+
+    root = parse(output.read_text(encoding="utf-8"))
+    assert root.getAttribute("width") == "400"
+    rects = root.getElementsByTagName("rect")
+    assert rects[0].getAttribute("fill") == card.THEMES["light"].bg
+    # an empty accent input falls back to the theme's own accent
+    title = root.getElementsByTagName("text")[0]
+    assert title.getAttribute("fill") == card.THEMES["light"].accent
+
+
+# ---------------------------------------------------------------- themes
+
+
+def text_fills(root: xml.dom.minidom.Element) -> set[str]:
+    texts = root.getElementsByTagName("text") + root.getElementsByTagName("tspan")
+    return {t.getAttribute("fill") for t in texts} - {""}
+
+
+@pytest.mark.parametrize("layout", card.LAYOUTS)
+@pytest.mark.parametrize("theme", card.THEMES)
+def test_every_theme_meets_contrast_on_its_own_background(
+    theme: str, layout: str
+) -> None:
+    palette = card.THEMES[theme]
+    stats = {**STATS, "languages": STATS["languages"] + DARK_LANGUAGES}
+
+    root = parse(card.render_card(stats, "octocat", "t", palette.accent, theme, layout))
+
+    assert root.getElementsByTagName("rect")[0].getAttribute("fill") == palette.bg
+    marks = root.getElementsByTagName("rect") + root.getElementsByTagName("circle")
+    fills = {m.getAttribute("fill") for m in marks}
+    fills -= {"", palette.bg, palette.card, palette.empty}
+    assert fills
+    for fill in fills:
+        assert card.contrast(fill, palette.bg) >= card.GRAPHIC_MIN, fill
+    title = root.getElementsByTagName("text")[0].getAttribute("fill")
+    assert card.contrast(title, palette.bg) >= card.TEXT_MIN
+    # every other text can sit on a tile as well as on the card background
+    for fill in text_fills(root) - {title}:
+        if card.HEX_COLOR.fullmatch(fill):
+            assert card.contrast(fill, palette.bg) >= card.TEXT_MIN, fill
+            assert card.contrast(fill, palette.card) >= card.TEXT_MIN, fill
+
+
+@pytest.mark.parametrize("accent", ACCENTS)
+@pytest.mark.parametrize("theme", card.THEMES)
+def test_calendar_levels_get_busier_away_from_the_background(
+    theme: str, accent: str
+) -> None:
+    palette = card.THEMES[theme]
+
+    empty, *levels = card.calendar_shades(
+        card.ensure_contrast(accent, card.TEXT_MIN, palette.bg), palette
+    )
+
+    assert empty == palette.empty
+    assert len(set(levels)) == 4
+    assert all(card.contrast(s, palette.bg) >= card.GRAPHIC_MIN for s in levels)
+    ratios = [card.contrast(s, palette.bg) for s in levels]
+    assert ratios == sorted(ratios)
+
+
+def test_ensure_contrast_darkens_on_a_light_background() -> None:
+    darkened = card.ensure_contrast("#60a5fa", card.TEXT_MIN, "#ffffff")
+
+    assert card.luminance(darkened) < card.luminance("#60a5fa")
+    assert card.contrast(darkened, "#ffffff") >= card.TEXT_MIN
+
+
+def test_dark_theme_is_the_default_card() -> None:
+    assert card.render_card(STATS, "octocat", "t", "#60a5fa") == card.render_card(
+        STATS, "octocat", "t", "#60a5fa", "dark", "wide"
+    )
+
+
+# ---------------------------------------------------------------- compact
+
+
+def test_compact_card_shows_the_last_26_weeks() -> None:
+    root = parse(card.render_card(STATS, "octocat", "t", "#60a5fa", layout="compact"))
+
+    cells = [
+        r for r in root.getElementsByTagName("rect") if "c " in r.getAttribute("class")
+    ]
+    # 25 full weeks plus the three-day current week
+    assert len(cells) == 25 * 7 + 3
+    assert root.getAttribute("width") == "400"
+    assert "LAST 26 WEEKS" in [
+        t.firstChild.data for t in root.getElementsByTagName("text") if t.firstChild
+    ]
+
+
+def test_compact_card_has_no_text_under_9px() -> None:
+    root = parse(card.render_card(STATS, "octocat", "t", "#60a5fa", layout="compact"))
+
+    texts = root.getElementsByTagName("text") + root.getElementsByTagName("tspan")
+    assert min(float(t.getAttribute("font-size")) for t in texts) == 9
+
+
+@pytest.mark.parametrize(("count", "height"), [(1, 376), (2, 376), (3, 396), (6, 416)])
+def test_compact_card_grows_one_row_per_two_languages(count: int, height: int) -> None:
+    stats = {**STATS, "languages": [[f"L{i}", 1.0, "#000000"] for i in range(count)]}
+
+    root = parse(card.render_card(stats, "octocat", "t", "#60a5fa", layout="compact"))
+
+    assert root.getAttribute("height") == str(height)
+
+
+def test_compact_card_puts_the_streak_in_the_sixth_tile() -> None:
+    svg = card.render_card(STATS, "octocat", "t", "#60a5fa", layout="compact")
+
+    assert f'fill="{card.GREEN}" font-size="9">CURRENT STREAK</text>' in svg
+    assert svg.count("<animate ") == 6
+
+
 # ---------------------------------------------------------------- example
+
+
+def load_render_examples() -> ModuleType:
+    path = Path(__file__).parent / "scripts" / "render_examples.py"
+    spec = importlib.util.spec_from_file_location("render_examples", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_committed_examples_match_the_snapshot() -> None:
+    examples = load_render_examples()
+
+    files = examples.render_all(examples.load_snapshot())
+
+    assert len(files) == 2 * len(card.THEMES) + 2
+    for path, svg in files.items():
+        assert path.read_text(encoding="utf-8") == svg, path.name
+        assert parse(svg).getAttribute("role") == "img"
 
 
 def test_committed_example_is_valid_svg() -> None:

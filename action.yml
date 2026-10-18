@@ -19,10 +19,18 @@ inputs:
     description: "Path of the SVG to write, relative to the workspace"
     required: false
     default: "assets/github-stats.svg"
-  accent:
-    description: "Hex color for the title and the contribution calendar"
+  theme:
+    description: "Color preset: dark, dim, light, dracula, nord or solarized-light"
     required: false
-    default: "#60a5fa"
+    default: "dark"
+  layout:
+    description: "wide (840 px, the full year) or compact (400 px, the last 26 weeks, for phones)"
+    required: false
+    default: "wide"
+  accent:
+    description: "Hex color for the title and the contribution calendar; empty means the theme's accent"
+    required: false
+    default: ""
   title:
     description: "Card title; empty means GITHUB | @USERNAME"
     required: false
@@ -62,6 +70,8 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
         INPUT_USERNAME: ${{ inputs.username }}
         INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_THEME: ${{ inputs.theme }}
+        INPUT_LAYOUT: ${{ inputs.layout }}
         INPUT_ACCENT: ${{ inputs.accent }}
         INPUT_TITLE: ${{ inputs.title }}
         INPUT_LANGUAGES: ${{ inputs.languages }}

@@ -71,3 +71,24 @@ jobs:
             esac
           done
           echo "Card parses; contributions=$CONTRIBUTIONS streak=$STREAK stars=$STARS"
+
+      - name: Run the action again with the theme and layout inputs
+        uses: ./
+        with:
+          username: Sagargupta16
+          token: ${{ github.token }}
+          theme: light
+          layout: compact
+          output: assets/github-stats-compact-light.svg
+
+      - name: Assert the compact light card used both inputs
+        run: |
+          set -euo pipefail
+          python - assets/github-stats-compact-light.svg <<'PY'
+          import sys, xml.dom.minidom
+          root = xml.dom.minidom.parse(sys.argv[1]).documentElement
+          background = root.getElementsByTagName("rect")[0].getAttribute("fill")
+          assert root.getAttribute("width") == "400", root.getAttribute("width")
+          assert background == "#ffffff", background
+          print("Compact light card parses, 400 px wide on #ffffff")
+          PY
