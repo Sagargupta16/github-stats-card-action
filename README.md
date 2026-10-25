@@ -75,7 +75,7 @@ Then `git add assets/` in the commit step instead of the single file.
 The job gets a `contents: write` token, so for the strictest supply-chain setup pin a full commit SHA instead of the moving `v1` tag, and let Renovate or Dependabot bump it:
 
 ```yaml
-      - uses: Sagargupta16/github-stats-card-action@4a7221cb12bbfb6e89d97c7a2623b60596bf105e # v1.1.0
+      - uses: Sagargupta16/github-stats-card-action@6490d5bfb062551f8721ff5250d936cacf034775 # v1.3.0
 ```
 
 ## Embed
