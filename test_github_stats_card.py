@@ -187,13 +187,13 @@ def test_default_accent_keeps_the_blue_family() -> None:
     assert shades == [card.EMPTY_DAY, "#2459c6", "#3872d7", "#4c8ce9", "#60a5fa"]
     for shade in shades:
         assert f'rx="2" fill="{shade}"' in svg
-    assert 'fill="#60a5fa" font-size="10"' in svg
+    assert 'fill="#60a5fa" font-size="10.5"' in svg
 
 
 def test_custom_accent_drives_title_and_calendar() -> None:
     svg = card.render_card(STATS, "octocat", "t", "#f59e0b")
 
-    assert 'fill="#f59e0b" font-size="10"' in svg
+    assert 'fill="#f59e0b" font-size="10.5"' in svg
     for shade in card.calendar_shades("#f59e0b"):
         assert f'rx="2" fill="{shade}"' in svg
     assert card.calendar_shades("#f59e0b")[-1] == "#f59e0b"
@@ -533,7 +533,7 @@ def test_main_accepts_an_accent_with_or_without_the_hash(
 
     card.main()
 
-    assert 'fill="#f59e0b" font-size="10"' in output.read_text(encoding="utf-8")
+    assert 'fill="#f59e0b" font-size="10.5"' in output.read_text(encoding="utf-8")
 
 
 def test_main_never_prints_the_token(

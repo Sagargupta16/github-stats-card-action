@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-25
+
+Larger labels on the wide card. The wide layout keeps every theme, input and
+size from 1.2.0; only its text grows, so the default card is no longer
+byte-identical to 1.1.x.
+
+### Changed
+
+- No text on the wide card is under 10.5 px. The title, tile labels, the streak panel, the languages heading and the legend were 8 to 10 px; at 840 px in a README column they read at about 7.9 px. A 10.5 px label holds 10.4 px in an 831 px column.
+- The first tile reads `CONTRIBUTIONS`; `CONTRIBUTIONS, LAST YEAR` is 180 px at 10.5 px, wider than its 130 px tile, and the calendar beside it already shows the year.
+- The streak panel stacks `LONGEST` and `ACTIVE` on two lines, since one line at 10.5 px is wider than the panel. The panel and card keep their size (840 x 340 for six languages).
+- The compact layout's title is 10.5 px too; its other text keeps its 9 px floor.
+- Checked in a browser on eight themes and layouts: no text crosses its tile, panel or the card edge, and no two lines overlap. svg-forge's `validate_svg.py --strict-contrast` reports 0 errors on all 14 examples.
+
 ## [1.2.0] - 2026-10-18
 
 Themes and a compact phone layout. With no new inputs set, the card is
