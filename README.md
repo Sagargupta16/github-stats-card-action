@@ -147,10 +147,10 @@ From [scripts/measure.py](scripts/measure.py) on the 2026-10-18 snapshot (Python
 
 | Variant | Size (px) | SVG bytes | Smallest text at 360 px | Stat values at 360 px | Render (median ms) |
 | --- | --- | --- | --- | --- | --- |
-| dark wide | 840 x 340 | 37,539 | 3.4 px | 9.4 px | 3.38 |
-| dark compact | 400 x 416 | 22,032 | 8.1 px | 18.0 px | 2.96 |
-| light wide | 840 x 340 | 37,133 | 3.4 px | 9.4 px | 8.38 |
-| light compact | 400 x 416 | 21,642 | 8.1 px | 18.0 px | 8.13 |
+| dark wide | 840 x 340 | 37,653 | 4.5 px | 9.4 px | 1.07 |
+| dark compact | 400 x 416 | 22,034 | 8.1 px | 18.0 px | 0.98 |
+| light wide | 840 x 340 | 37,233 | 4.5 px | 9.4 px | 2.61 |
+| light compact | 400 x 416 | 21,644 | 8.1 px | 18.0 px | 2.44 |
 
 - One live run for @Sagargupta16 (`--live`) made 1 GraphQL request and took 4.18 s to fetch; only accounts with more than 100 owned public repositories need a second page.
 - All 14 example SVGs report 0 errors under svg-forge's `validate_svg.py --strict-contrast`.
@@ -216,7 +216,7 @@ Details:
 - Languages are ranked by bytes of code, summed over the top 10 languages GitHub detects in each repository.
 - github.com only; GitHub Enterprise Server is not supported.
 - The card names its fonts with system fallbacks instead of embedding them, so text widths vary slightly between viewers.
-- The wide card is a fixed 840 px layout that scales down as a whole. Shown 360 px wide, its smallest text is 3.4 px on screen, which a phone cannot show legibly. Use `layout: compact` (8.1 px at the same width) for phones, through the `<picture>` pattern in [Embed](#embed).
+- The wide card is a fixed 840 px layout that scales down as a whole. Shown 360 px wide, its smallest text is 4.5 px on screen, which a phone cannot show legibly. Use `layout: compact` (8.1 px at the same width) for phones, through the `<picture>` pattern in [Embed](#embed).
 - The compact card shows the last 26 weeks of the calendar, and its shading is cut at the quartiles of those weeks. The longest streak and active days still cover the full year, as its `/ YEAR` label says, and so does the `CONTRIBUTIONS` tile: it is the same last-year total as on the wide card, not a 26 week count.
 - The action runs `actions/setup-python` with Python 3.13 in your job, and that Python stays first on `PATH` for the steps after it. If a later step needs another version, give it its own `setup-python` step.
 

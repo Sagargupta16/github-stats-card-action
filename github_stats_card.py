@@ -389,7 +389,7 @@ def card_head(
         + ".grow{transform:scaleX(0);transform-origin:left;transform-box:fill-box;animation:grow 1.2s .5s ease forwards}"
         "@keyframes grow{to{transform:scaleX(1)}}</style>",
         f'<rect x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="14" fill="{ink.bg}" stroke="{ink.border}"/>',
-        f'<text class="m" x="24" y="30" fill="{ink.accent}" font-size="10">{escape(title)}</text>',
+        f'<text class="m" x="24" y="30" fill="{ink.accent}" font-size="10.5">{escape(title)}</text>',
     ]
 
 
@@ -402,7 +402,7 @@ def tile(
     value: str,
     name: str,
     ink: Theme,
-    sizes: tuple[int, int, int, int],
+    sizes: tuple[int, int, float, int],
     name_fill: str = "",
 ) -> str:
     """One stat tile that fades in; sizes are value font, value y, label font, label y."""
@@ -441,6 +441,7 @@ def language_block(
     column: int,
     ink: Theme,
     heading_size: float,
+    legend_size: float,
 ) -> list[str]:
     """Heading, stacked bar that grows in, and a legend of per_row columns."""
     parts = [
@@ -465,7 +466,7 @@ def language_block(
         lyy = ly + 44 + (i // per_row) * 20
         parts.append(
             f'<circle cx="{lx + 5}" cy="{lyy - 3}" r="4.5" fill="{color}"/>'
-            f'<text class="m" x="{lx + 16}" y="{lyy}" fill="{ink.legend}" font-size="9">{escape(name.upper())}  {pct}%</text>'
+            f'<text class="m" x="{lx + 16}" y="{lyy}" fill="{ink.legend}" font-size="{legend_size}">{escape(name.upper())}  {pct}%</text>'
         )
     return parts
 
@@ -473,12 +474,16 @@ def language_block(
 def wide_card(
     stats: dict, title: str, label: str, ink: Theme, languages: list
 ) -> list[str]:
-    """840 px: five tiles in a row, the full year, a streak panel, three-column legend."""
+    """840 px: five tiles in a row, the full year, a streak panel, three-column legend.
+
+    No text under 10.5 px, which still reads at 10 px when the card fills a README column.
+    """
     cal = stats["calendar"]
     legend_rows = (len(languages) + 2) // 3  # three languages per legend row
     w, h = 840, 300 + 20 * max(2, legend_rows)
     tiles = [
-        (f"{stats['contributions']:,}", "contributions, last year"),
+        # the calendar beside it is the year; "contributions, last year" no longer fits at 10.5 px
+        (f"{stats['contributions']:,}", "contributions"),
         (f"{stats['commits']:,}", "commits"),
         (f"{stats['prs']:,}", "pull requests"),
         (f"{stats['stars']:,}", "stars earned"),
@@ -488,7 +493,7 @@ def wide_card(
     tw = (w - 32 - 4 * 10) / 5
     for i, (value, name) in enumerate(tiles):
         parts.append(
-            tile(i, 16 + i * (tw + 10), 44, tw, 64, value, name, ink, (22, 32, 8, 51))
+            tile(i, 16 + i * (tw + 10), 44, tw, 64, value, name, ink, (22, 32, 10.5, 52))
         )
 
     cell, gap, gx, gy = 9, 2.6, 24, 128
@@ -496,11 +501,13 @@ def wide_card(
     sx = gx + len(cal) * (cell + gap) + 18
     parts += [
         f'<rect x="{sx:.1f}" y="{gy}" width="{w - 16 - sx:.1f}" height="{7 * (cell + gap) - gap:.0f}" rx="10" fill="{ink.card}" stroke="{ink.tile_border}"/>',
-        f'<text class="m" x="{sx + 14:.1f}" y="{gy + 20}" fill="{ink.streak}" font-size="8.5">CURRENT STREAK</text>',
-        f'<text class="v" x="{sx + 14:.1f}" y="{gy + 46}" fill="{ink.text}" font-size="22">{stats["streak"]}<tspan class="m" font-size="9" fill="{ink.muted}"> DAYS</tspan></text>',
-        f'<text class="m" x="{sx + 14:.1f}" y="{gy + 66}" fill="{ink.muted}" font-size="8">LONGEST {stats["longest"]}  |  ACTIVE {stats["active_days"]}</text>',
+        f'<text class="m" x="{sx + 14:.1f}" y="{gy + 15}" fill="{ink.streak}" font-size="10.5">CURRENT STREAK</text>',
+        f'<text class="v" x="{sx + 14:.1f}" y="{gy + 42}" fill="{ink.text}" font-size="22">{stats["streak"]}<tspan class="m" font-size="10.5" fill="{ink.muted}"> DAYS</tspan></text>',
+        # one line at 10.5 px is wider than the panel, so longest and active stack
+        f'<text class="m" x="{sx + 14:.1f}" y="{gy + 58}" fill="{ink.muted}" font-size="10.5">LONGEST {stats["longest"]}</text>',
+        f'<text class="m" x="{sx + 14:.1f}" y="{gy + 71}" fill="{ink.muted}" font-size="10.5">ACTIVE {stats["active_days"]}</text>',
     ]
-    return parts + language_block(languages, 232, w, 3, 270, ink, 8.5)
+    return parts + language_block(languages, 232, w, 3, 270, ink, 10.5, 10.5)
 
 
 def compact_card(
@@ -540,7 +547,7 @@ def compact_card(
         f'<text class="m" x="{w - 24}" y="{gy - 10}" fill="{ink.muted}" font-size="9" text-anchor="end">{year}</text>',
     ]
     parts += calendar_cells(weeks, calendar_shades(ink.accent, ink), 24, gy, 10.6, 3)
-    return parts + language_block(languages, 316, w, 2, 176, ink, 9)
+    return parts + language_block(languages, 316, w, 2, 176, ink, 9, 9)
 
 
 def render_card(
