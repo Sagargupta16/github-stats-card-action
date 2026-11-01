@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.15"
       # Pinned by hand: Renovate does not read versions inside a `run:` block,
       # and a ruff release that grows the default ruleset can turn an unchanged
       # tree red. Quoted because a bare `:all: ` parses as a YAML mapping.
