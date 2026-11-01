@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Sagargupta16/orrery/main/skills/orrery/references/diagram.schema.json
+# Rendered with orrery (github.com/Sagargupta16/orrery):
+#   orrery render docs/diagrams/how-it-works.yaml -o docs/diagrams/how-it-works -f svg --theme both
+# Reviewed at README width: orrery review docs/diagrams/how-it-works.yaml --width 880
+title: How the action works
+subtitle: One standard library Python script in a composite action. The token goes to api.github.com and nowhere else.
+direction: down
+layout: { spacing: compact }
+legend:
+  dashed: API call failed
+
+groups:
+  action: { type: box, label: github-stats-card-action, evidence: "action.yml:59#composite" }
+
+nodes:
+  cron: { icon: tabler:clock, label: Daily cron, note: or workflow_dispatch, evidence: "README.md:27#cron" }
+  setup: { icon: logos:python, label: setup-python, note: Python 3.13, in: action, evidence: "action.yml:62#setup-python" }
+  inputs: { icon: tabler:adjustments, label: Read inputs, note: "INPUT_* and GITHUB_TOKEN", in: action, align: setup, evidence: "action.yml:70#GITHUB_TOKEN" }
+  fetch: { icon: tabler:cloud-download, label: Fetch stats, note: 100 repos a request, in: action, align: setup, evidence: "github_stats_card.py:219#fetch_stats" }
+  api: { icon: logos:github-icon, label: GitHub GraphQL API, note: api.github.com only, evidence: "github_stats_card.py:154#GRAPHQL_URL" }
+  stats: { icon: tabler:calculator, label: Compute stats, note: "totals, streaks, top languages", in: action, evidence: "github_stats_card.py:203#streaks" }
+  render: { icon: tabler:palette, label: Render card, note: "contrast pass, wide or compact", in: action, align: stats, evidence: "github_stats_card.py:553#render_card" }
+  write: { icon: tabler:file-export, label: Write SVG, note: plus 3 step outputs, in: action, align: stats, evidence: "github_stats_card.py:664#write_text" }
+  keep: { icon: github:history, label: Keep old card, note: "warn, exit 0", in: action, align: setup, evidence: "github_stats_card.py:654#keeping" }
+  fail: { icon: tabler:circle-x, label: Fail the run, note: "no card yet, exit 1", in: action, align: setup, evidence: "github_stats_card.py:658#exist" }
+  commit: { icon: github:git-commit, label: Your commit step, note: only when the card changed, evidence: "README.md:46#diff" }
+  readme: { icon: github:markdown, label: Your README, note: GitHub serves the file, align: commit, evidence: "README.md:84#github-stats.svg" }
+
+edges:
+  - cron -> setup: "uses: @v1"
+  - setup -> inputs -> fetch
+  # Written in layout order so the API sits above the step that calls it; the head still points at the API.
+  - { from: api, to: fetch, arrow: start, label: POST /graphql }
+  - fetch -> stats -> render -> write
+  - write -> commit: output SVG
+  - commit -> readme: git push
+  - fetch --> keep: card exists
+  - fetch --> fail: no card yet

@@ -168,23 +168,13 @@ From [scripts/measure.py](scripts/measure.py) on the 2026-10-18 snapshot (Python
 
 ## How it works
 
-```mermaid
-flowchart TD
-    A["schedule or workflow_dispatch"] --> B["action.yml: setup-python 3.13"]
-    B --> C["github_stats_card.py: read INPUT_* and GITHUB_TOKEN"]
-    C --> D["GraphQL: followers, contribution calendar, first 100 repos"]
-    D --> E{"more repos?"}
-    E -- yes --> F["GraphQL: next 100 repos"]
-    F --> E
-    E -- no --> G["stats: totals, streaks, top languages"]
-    G --> H["render_card: contrast pass on accent and language colors, then the SVG"]
-    H --> I["write output, set outputs"]
-    I --> J["your workflow commits the file"]
-    D -. "API error" .-> K{"output exists?"}
-    F -. "API error" .-> K
-    K -- yes --> L["keep the old card, warn, exit 0"]
-    K -- no --> M["exit 1"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/how-it-works-light.svg">
+  <img width="880" src="docs/diagrams/how-it-works-light.svg" alt="How the action works: a daily cron or workflow_dispatch in your workflow runs github-stats-card-action with uses: @v1. The composite action sets up Python 3.13, and the script reads its INPUT_* variables and GITHUB_TOKEN, then fetches the stats with POST /graphql from the GitHub GraphQL API, 100 repositories a request; api.github.com is the only host it calls. It computes totals, streaks and top languages, renders the card with a contrast pass in the wide or compact layout, and writes the SVG plus three step outputs. Your commit step commits the SVG only when the card changed and pushes it, and your README shows the file GitHub serves. If the API call fails and a card already exists, the action keeps the old card, warns and exits 0; with no card yet it fails the run with exit 1.">
+</picture>
+
+The spec behind the picture is [`docs/diagrams/how-it-works.yaml`](docs/diagrams/how-it-works.yaml), rendered with [orrery](https://github.com/Sagargupta16/orrery).
 
 1. The script queries the GitHub GraphQL API for the user's followers, contribution calendar and totals for the last year, and the public, non-fork repositories they own with their stars and top 10 languages by size, 100 repositories per request.
 2. It renders the card: five stat tiles; the contribution calendar, one column per week, fading in left to right; current streak, longest streak and active days; and a stacked bar of the top languages by code size, with a legend.
