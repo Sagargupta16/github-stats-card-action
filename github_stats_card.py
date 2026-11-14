@@ -14,6 +14,7 @@ from __future__ import annotations
 import colorsys
 import http.client
 import json
+import math
 import os
 import re
 import urllib.request
@@ -249,6 +250,7 @@ def fetch_stats(login: str, token: str, top: int, exclude: set[str]) -> dict:
         "commits": cc["totalCommitContributions"],
         "prs": cc["totalPullRequestContributions"],
         "stars": sum(r["stargazerCount"] for r in repos),
+        "repo_stars": {r["name"]: r["stargazerCount"] for r in repos},
         "followers": user["followers"]["totalCount"],
         "streak": current,
         "longest": longest,
@@ -493,7 +495,9 @@ def wide_card(
     tw = (w - 32 - 4 * 10) / 5
     for i, (value, name) in enumerate(tiles):
         parts.append(
-            tile(i, 16 + i * (tw + 10), 44, tw, 64, value, name, ink, (22, 32, 10.5, 52))
+            tile(
+                i, 16 + i * (tw + 10), 44, tw, 64, value, name, ink, (22, 32, 10.5, 52)
+            )
         )
 
     cell, gap, gx, gy = 9, 2.6, 24, 128
@@ -550,6 +554,447 @@ def compact_card(
     return parts + language_block(languages, 316, w, 2, 176, ink, 9, 9)
 
 
+# ---------------------------------------------------------------- flat style
+# style: flat draws the look of the profile README this card comes from
+# (Sagargupta16/Sagargupta16, scripts/kit.py): one fill and one hairline per card
+# and tile, mono micro-labels over sans numerals, and entrances that rest on the
+# finished frame. An element's own attributes are its last frame and its
+# animation holds the start value from 0 s until its turn, so a still render (a
+# link preview, a viewer without SMIL) shows the whole card. Loops last 2 or 12 s.
+STYLES = ("classic", "flat")
+# The 320 px card for phones. It exists only in the flat look, so it is drawn
+# flat whatever style says, and style: flat with layout: compact draws it too.
+PHONE = "phone"
+PHONE_WEEKS = 20
+EASE = "0.16 1 0.3 1"  # the ease-out every entrance uses
+CLOCK = 12  # seconds: the long loop; the short one is 2 s
+DOT = "\u00b7"  # the middle dot two facts are joined with
+MICRO = 10.5  # the smallest label on the 840 px card
+MICRO_PHONE = 11.5  # the smallest label on the 320 px card
+# On the dark preset the flat look takes the profile kit's hairlines, captions,
+# legend and empty days; the other presets keep their own colors.
+FLAT_DARK = replace(
+    DARK,
+    border="rgba(255,255,255,0.09)",
+    tile_border="rgba(255,255,255,0.14)",
+    muted="rgba(255,255,255,0.62)",
+    legend="rgba(255,255,255,0.78)",
+    empty="rgba(255,255,255,0.14)",
+)
+FLAT_CSS = (
+    f"<style>.m{{font-family:{MONO};font-weight:700;letter-spacing:1.2px}}"
+    f".n{{font-family:{SANS};font-weight:800;font-variant-numeric:tabular-nums}}"
+    f".b{{font-family:{SANS};font-weight:500}}</style>"
+)
+
+
+def num(value: float) -> str:
+    """A coordinate to two places at most, with no trailing zeros and never -0."""
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+def sans_width(text: str, size: float) -> float:
+    """A conservative width for sans text, glyph by glyph."""
+
+    def advance(char: str) -> float:
+        if char in "W@%M":
+            return 1.0
+        if char in "ilI.,:;'!|`":
+            return 0.34
+        if char in " fjrt()[]":
+            return 0.44
+        return 0.7 if char.isupper() else 0.58
+
+    return sum(map(advance, text)) * size
+
+
+def mono_width(text: str, size: float) -> float:
+    """Drawn width of a mono label: 0.6 em a glyph, 1.2 px tracking between glyphs."""
+    return len(text) * (size * 0.6 + 1.2) - 1.2
+
+
+def fit(text: str, room: float, size: float) -> str:
+    """A mono label cut to room, ending in three dots when it had to be cut."""
+    if mono_width(text, size) <= room:
+        return text
+    while len(text) > 1 and mono_width(text + "...", size) > room:
+        text = text[:-1]
+    return text.rstrip() + "..."
+
+
+def tint(color: str, alpha: float = 0.14) -> str:
+    r, g, b = channels(color)
+    return f"rgba({r},{g},{b},{alpha:g})"
+
+
+def held(begin: float, dur: float = 0.4) -> str:
+    """Timing that runs from 0 s and holds the start value until begin."""
+    total = begin + dur
+    return (
+        f'keyTimes="0;{begin / total:.3f};1" dur="{total:.2f}s" fill="freeze" '
+        f'calcMode="spline" keySplines="0 0 1 1;{EASE}"'
+    )
+
+
+def enter(at: float, body: str, rise: bool = True) -> str:
+    """body in a group that fades in, and rises 8 px, at `at` seconds."""
+    times = held(at)
+    motion = f'<animate attributeName="opacity" values="0;0;1" {times}/>'
+    if rise:
+        motion += (
+            '<animateTransform attributeName="transform" type="translate" '
+            f'values="0 8;0 8;0 0" {times}/>'
+        )
+    return f"<g>{motion}{body}</g>"
+
+
+def flat_text(
+    x: float,
+    y: float,
+    content: object,
+    size: float,
+    fill: str,
+    cls: str = "m",
+    anchor: str = "",
+) -> str:
+    align = f' text-anchor="{anchor}"' if anchor else ""
+    return (
+        f'<text class="{cls}" x="{num(x)}" y="{num(y)}" font-size="{size:g}" '
+        f'fill="{fill}"{align}>{escape(str(content))}</text>'
+    )
+
+
+def rounded_rect_path(x: float, y: float, w: float, h: float, r: float) -> str:
+    """A rounded rectangle as a path that starts on its top edge."""
+    a = f"A{num(r)} {num(r)} 0 0 1"
+    return (
+        f"M{num(x + r)} {num(y)}H{num(x + w - r)}{a} {num(x + w)} {num(y + r)}"
+        f"V{num(y + h - r)}{a} {num(x + w - r)} {num(y + h)}H{num(x + r)}"
+        f"{a} {num(x)} {num(y + h - r)}V{num(y + r)}{a} {num(x + r)} {num(y)}Z"
+    )
+
+
+def live_dot(cx: float, cy: float, color: str) -> str:
+    """A status point: a ring that widens and fades every 2 s around a steady dot."""
+    at = f'cx="{num(cx)}" cy="{num(cy)}" r="4"'
+    return (
+        f'<circle {at} fill="none" stroke="{color}" stroke-width="1.5">'
+        '<animate attributeName="r" values="4;11" dur="2s" repeatCount="indefinite"/>'
+        '<animate attributeName="opacity" values="0.9;0" dur="2s" repeatCount="indefinite"/>'
+        f'</circle><circle {at} fill="{color}"/>'
+    )
+
+
+def flat_tile(
+    x: float,
+    y: float,
+    w: float,
+    value: str,
+    name: str,
+    ink: Theme,
+    lit: tuple[str, str, str] | None,
+    phone: bool,
+) -> str:
+    """A stat tile: one sans numeral over a mono label. lit (fill, stroke, label
+    color) marks the card's lead tile; a long numeral steps down rather than
+    leave its tile."""
+    inset, size, value_y, name_y, h, micro = (
+        (12, 22, 30, 49, 62, MICRO_PHONE) if phone else (14, 26, 38, 58, 74, MICRO)
+    )
+    while size > 16 and sans_width(value, size) > w - 2 * inset:
+        size -= 1
+    fill, stroke, muted = lit or (ink.card, ink.tile_border, ink.muted)
+    return (
+        f'<rect x="{num(x)}" y="{num(y)}" width="{num(w)}" height="{h}" rx="10" '
+        f'fill="{fill}" stroke="{stroke}"/>'
+        + flat_text(x + inset, y + value_y, value, size, ink.text, "n")
+        + flat_text(x + inset, y + name_y, name.upper(), micro, muted)
+    )
+
+
+def week_column(
+    week: list[int],
+    shades: list[str],
+    cuts: list[int],
+    x: float,
+    top: float,
+    cell: float,
+    pitch: float,
+) -> str:
+    return "".join(
+        f'<rect x="{num(x)}" y="{num(top + day * pitch)}" width="{num(cell)}" '
+        f'height="{num(cell)}" rx="2" fill="{shades[level(count, cuts)]}"/>'
+        for day, count in enumerate(week)
+    )
+
+
+def calendar_motion(
+    weeks: list[list[int]],
+    x: float,
+    top: float,
+    cell: float,
+    pitch: float,
+    scan: str,
+    ripple: str,
+) -> str:
+    """The calendar's loop: an outline that rests on this week and, once every 12 s,
+    steps across the weeks from the oldest, and a ripple on the busiest day every 2 s."""
+    out = ""
+    last = len(weeks) - 1
+    if last > 0:
+        step = min(0.45, 8.6 / last)
+        points = [(0.0, "0 0")] + [
+            (2.4 + column * step, f"{num((column - last) * pitch)} 0")
+            for column in range(last + 1)
+        ]
+        values = ";".join(value for _, value in points)
+        times = ";".join(f"{round(t / CLOCK, 4):g}" for t, _ in points)
+        outline = rounded_rect_path(
+            x + last * pitch - 2.5, top - 2.5, cell + 5, 6 * pitch + cell + 5, 4
+        )
+        out += (
+            f'<path d="{outline}" fill="none" stroke="{scan}" stroke-width="1.5">'
+            f'<animateTransform attributeName="transform" type="translate" values="{values}" '
+            f'keyTimes="{times}" calcMode="discrete" dur="{CLOCK}s" repeatCount="indefinite"/></path>'
+        )
+    # the busiest day; the latest one when two tie
+    count, column, day = max(
+        ((count, c, d) for c, week in enumerate(weeks) for d, count in enumerate(week)),
+        default=(0, 0, 0),
+    )
+    if count:
+        half = cell / 2 + 1.5
+        cx, cy = x + column * pitch + cell / 2, top + day * pitch + cell / 2
+        out += (
+            f'<g transform="translate({num(cx)} {num(cy)})"><path d="{rounded_rect_path(-half, -half, 2 * half, 2 * half, 3)}" '
+            f'fill="none" stroke="{ripple}" stroke-width="1.5">'
+            '<animateTransform attributeName="transform" type="scale" values="1;1.9" dur="2s" repeatCount="indefinite"/>'
+            '<animate attributeName="opacity" values="0.9;0" dur="2s" repeatCount="indefinite"/></path></g>'
+        )
+    return out
+
+
+def flat_languages(
+    languages: list[list],
+    x: float,
+    y: float,
+    width: float,
+    per_row: int,
+    ink: Theme,
+    micro: float,
+    at: float,
+) -> tuple[str, str, float]:
+    """The heading, a stacked bar that a sliding clip reveals, and a legend.
+
+    Returns (the clip for <defs>, the svg, the baseline of the last legend row).
+    """
+    bar_y = y + 12
+    total = sum(pct for _, pct, _ in languages) or 1
+    entries = [f"{name} {pct:g}%" for name, pct, _ in languages]
+    # as many columns as hold every entry; one long name takes the legend to fewer
+    columns = next(
+        c
+        for c in range(per_row, 0, -1)
+        if c == 1 or all(sans_width(e, 13) <= width / c - 23 for e in entries)
+    )
+    start = f"-{num(width)} 0"
+    clip = (
+        f'<clipPath id="langs"><rect x="{num(x)}" y="{num(bar_y)}" width="{num(width)}" height="8" rx="4">'
+        f'<animateTransform attributeName="transform" type="translate" values="{start};{start};0 0" '
+        f"{held(at, 1)}/></rect></clipPath>"
+    )
+    left, segments = x, []
+    for _, pct, color in languages:
+        share = width * pct / total
+        segments.append(
+            f'<rect x="{left:.1f}" y="{num(bar_y)}" width="{share:.1f}" height="8" fill="{color}"/>'
+        )
+        left += share
+    out = [
+        flat_text(x, y, "TOP LANGUAGES BY CODE SIZE", micro, ink.accent),
+        f'<g clip-path="url(#langs)">{"".join(segments)}</g>',
+    ]
+    for i, (entry, (_, _, color)) in enumerate(zip(entries, languages, strict=True)):
+        lx = x + (i % columns) * width / columns
+        ly = bar_y + 30 + (i // columns) * 22
+        out.append(
+            f'<circle cx="{num(lx + 5)}" cy="{num(ly - 4.5)}" r="4" fill="{color}"/>'
+        )
+        out.append(flat_text(lx + 15, ly, entry, 13, ink.legend, "b"))
+    return clip, "".join(out), bar_y + 30 + (math.ceil(len(entries) / columns) - 1) * 22
+
+
+def flat_head(w: int, h: int, label: str, ink: Theme, defs: str) -> list[str]:
+    """Opening tag, style, the flat surface (one fill, one hairline) and the defs."""
+    return [
+        svg_open(w, h, label),
+        FLAT_CSS,
+        f'<rect x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="14" fill="{ink.bg}" stroke="{ink.border}"/>',
+        f"<defs>{defs}</defs>" if defs else "",
+    ]
+
+
+def lead_tile(ink: Theme, shades: list[str]) -> tuple[str, str, str]:
+    """The lead tile's (fill, stroke, label color): the accent's deep shade at
+    14%, edged with the second busiest calendar level (3:1 and up), its label held
+    to 4.5:1 on the tint as well as on the card."""
+    deep = deep_shade(ink.accent)
+    label = ink.muted
+    if HEX_COLOR.fullmatch(label):
+        label = ensure_contrast(label, TEXT_MIN, mix(ink.bg, deep, 0.14))
+    return tint(deep), shades[3], label
+
+
+def flat_card(
+    stats: dict, title: str, label: str, ink: Theme, languages: list
+) -> list[str]:
+    """840 px in the flat look: the title and the live streak, five tiles, the
+    year's calendar entering one column at a time, and the top languages."""
+    w, pad = 840, 24
+    inner = w - 2 * pad
+    shades = calendar_shades(ink.accent, ink)
+    streak = stats["streak"]
+    status = f"{streak:,} DAY STREAK"
+    status_w = mono_width(status, MICRO)
+    room = inner - status_w - 40
+    body = [flat_text(pad, 30, fit(title, room, MICRO), MICRO, ink.accent)]
+    if streak:
+        # green only while the streak is live
+        body.append(live_dot(w - pad - status_w - 12, 26.5, ink.streak))
+    body.append(
+        flat_text(
+            w - pad,
+            30,
+            status,
+            MICRO,
+            ink.streak if streak else ink.muted,
+            anchor="end",
+        )
+    )
+
+    tiles = [
+        (stats["contributions"], "contributions"),
+        (stats["commits"], "commits"),
+        (stats["prs"], "pull requests"),
+        (stats["stars"], "stars earned"),
+        (stats["followers"], "followers"),
+    ]
+    tw = (inner - 10 * (len(tiles) - 1)) / len(tiles)
+    lit = lead_tile(ink, shades)
+    for i, (value, name) in enumerate(tiles):
+        x = pad + i * (tw + 10)
+        tile_svg = flat_tile(
+            x, 46, tw, f"{value:,}", name, ink, lit if i == 0 else None, False
+        )
+        body.append(enter(0.1 + i * 0.08, tile_svg))
+
+    weeks = stats["calendar"]
+    pitch = min(15.0, (inner + 3) / max(len(weeks), 1))  # 53 weeks fill the row
+    cell, top = pitch - 3, 160
+    facts = (
+        f"LONGEST STREAK {stats['longest']:,}  {DOT}  "
+        f"{stats['active_days']:,} ACTIVE DAYS"
+    )
+    body.append(
+        enter(
+            0.45,
+            flat_text(pad, 148, "PAST 12 MONTHS", MICRO, ink.accent)
+            + flat_text(w - pad, 148, facts, MICRO, ink.muted, anchor="end"),
+        )
+    )
+    cuts = level_cuts(weeks)
+    for i, week in enumerate(weeks):
+        # one column at a time, oldest first, the last one in by 1.2 s
+        at = 0.45 + 0.75 * i / max(len(weeks) - 1, 1)
+        column = week_column(week, shades, cuts, pad + i * pitch, top, cell, pitch)
+        body.append(enter(at, column, rise=False))
+    motion = calendar_motion(weeks, pad, top, cell, pitch, ink.accent, shades[-1])
+    body.append(enter(1.6, motion, rise=False))
+    y = top + 6 * pitch + cell
+
+    defs = ""
+    if languages:
+        defs, legend, y = flat_languages(
+            languages, pad, y + 34, inner, 3, ink, MICRO, 1.0
+        )
+        body.append(enter(1.0, legend))
+    return [*flat_head(w, math.ceil(y + 24), label, ink, defs), *body]
+
+
+def phone_card(
+    stats: dict, title: str, label: str, ink: Theme, languages: list
+) -> list[str]:
+    """320 px in the flat look, for phones: six tiles of the past 12 months, the
+    last PHONE_WEEKS weeks, stars and followers on one line, and the top languages.
+    No label is under 11.5 px, which holds about 11 px where a phone shows it."""
+    w, pad = 320, 18
+    inner = w - 2 * pad
+    shades = calendar_shades(ink.accent, ink)
+    body = [flat_text(pad, 30, fit(title, inner, MICRO_PHONE), MICRO_PHONE, ink.accent)]
+
+    tiles = [
+        (stats["contributions"], "contributions"),
+        (stats["commits"], "commits"),
+        (stats["prs"], "pull requests"),
+        (stats["active_days"], "active days"),
+        (stats["streak"], "current streak"),
+        (stats["longest"], "longest streak"),
+    ]
+    starts = [min(0.1 + i * 0.08, 1.2) for i in range(len(tiles) + 3)]
+    tw = (inner - 10) / 2
+    lit = lead_tile(ink, shades)
+    for i, (value, name) in enumerate(tiles):
+        x, y = pad + (i % 2) * (tw + 10), 44 + (i // 2) * 72
+        tile_svg = flat_tile(
+            x, y, tw, f"{value:,}", name, ink, lit if i == 0 else None, True
+        )
+        body.append(enter(starts[i], tile_svg))
+
+    weeks = stats["calendar"][-PHONE_WEEKS:]
+    cell, pitch = 11, 14
+    y = 44 + 3 * 72 + 20
+    top = y + 12
+    height = 6 * pitch + cell
+    wide = max(len(weeks) - 1, 0) * pitch + cell
+    # the cells are revealed left to right by one clip that slides in, so the
+    # window is one animated element and rests whole
+    defs = (
+        f'<clipPath id="weeks"><rect x="{pad}" y="{top}" width="{wide}" height="{height}">'
+        f'<animateTransform attributeName="transform" type="translate" '
+        f'values="-{wide} 0;-{wide} 0;0 0" {held(0.3, 0.9)}/></rect></clipPath>'
+    )
+    body.append(
+        enter(
+            starts[len(tiles)],
+            flat_text(pad, y, f"LAST {len(weeks)} WEEKS", MICRO_PHONE, ink.accent)
+            + flat_text(w - pad, y, "THIS WEEK", MICRO_PHONE, ink.muted, anchor="end"),
+        )
+    )
+    cuts = level_cuts(weeks)
+    cells = "".join(
+        week_column(week, shades, cuts, pad + i * pitch, top, cell, pitch)
+        for i, week in enumerate(weeks)
+    )
+    body.append(f'<g clip-path="url(#weeks)">{cells}</g>')
+    motion = calendar_motion(weeks, pad, top, cell, pitch, ink.accent, shades[-1])
+    body.append(enter(1.2, motion, rise=False))
+    y = top + height + 28
+
+    reach = f"{stats['stars']:,} total stars {DOT} {stats['followers']:,} followers"
+    body.append(
+        enter(starts[len(tiles) + 1], flat_text(pad, y, reach, 13.5, ink.legend, "b"))
+    )
+    if languages:
+        at = starts[len(tiles) + 2]
+        clip, legend, y = flat_languages(
+            languages, pad, y + 34, inner, 2, ink, MICRO_PHONE, at
+        )
+        defs += clip
+        body.append(enter(at, legend))
+    return [*flat_head(w, math.ceil(y + pad), label, ink, defs), *body]
+
+
 def render_card(
     stats: dict,
     username: str,
@@ -557,8 +1002,10 @@ def render_card(
     accent: str,
     theme: str = "dark",
     layout: str = "wide",
+    style: str = "classic",
 ) -> str:
-    palette = THEMES[theme]
+    flat = style == "flat" or layout == PHONE
+    palette = FLAT_DARK if flat and theme == "dark" else THEMES[theme]
     bg = palette.bg
     # linguist colors are data: one too dark (or too light) for the card moves to
     # the nearest shade that reaches 3:1 rather than being dropped
@@ -579,7 +1026,10 @@ def render_card(
         f"GitHub stats for @{username}: {stats['contributions']} contributions last year, "
         f"{stats['streak']} day streak, {stats['stars']} stars"
     )
-    body = compact_card if layout == "compact" else wide_card
+    if flat:
+        body = flat_card if layout == "wide" else phone_card
+    else:
+        body = compact_card if layout == "compact" else wide_card
     return "".join([*body(stats, title, label, ink, languages), SVG_CLOSE])
 
 
@@ -638,7 +1088,10 @@ def main() -> None:
     if not token:
         fail("no token: set the token input (GITHUB_TOKEN when run locally)")
     theme = parse_choice("theme", read_input("THEME") or "dark", tuple(THEMES))
-    layout = parse_choice("layout", read_input("LAYOUT") or LAYOUTS[0], LAYOUTS)
+    layout = parse_choice(
+        "layout", read_input("LAYOUT") or LAYOUTS[0], (*LAYOUTS, PHONE)
+    )
+    style = parse_choice("style", read_input("STYLE") or STYLES[0], STYLES)
     accent = parse_accent(read_input("ACCENT") or THEMES[theme].accent)
     top = parse_languages(read_input("LANGUAGES") or DEFAULT_LANGUAGES)
     exclude = parse_exclude(read_input("EXCLUDE_REPOS"))
@@ -659,7 +1112,7 @@ def main() -> None:
             f"so there is no card to keep: {exc}"
         )
 
-    svg = render_card(stats, username, title, accent, theme, layout) + "\n"
+    svg = render_card(stats, username, title, accent, theme, layout, style) + "\n"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(svg, encoding="utf-8", newline="\n")
     print(

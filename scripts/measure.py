@@ -35,12 +35,12 @@ def font_sizes(svg: str) -> list[float]:
     return [float(n.getAttribute("font-size")) for n in nodes]
 
 
-def render_ms(stats: dict, username: str, theme: str, layout: str) -> float:
+def render_ms(stats: dict, username: str, theme: str, layout: str, style: str) -> float:
     accent = card.THEMES[theme].accent
     times = []
     for _ in range(RUNS):
         start = time.perf_counter()
-        card.render_card(stats, username, "t", accent, theme, layout)
+        card.render_card(stats, username, "t", accent, theme, layout, style)
         times.append((time.perf_counter() - start) * 1000)
     return statistics.median(times)
 
@@ -56,19 +56,31 @@ def offline(snapshot: dict) -> None:
         f"Stat values at {PHONE_WIDTH} px | Render (median ms) |"
     )
     print("| --- | --- | --- | --- | --- | --- |")
-    for theme in ("dark", "light"):
-        for layout in card.LAYOUTS:
-            accent = card.THEMES[theme].accent
-            svg = card.render_card(stats, username, title, accent, theme, layout) + "\n"
-            root = xml.dom.minidom.parseString(svg).documentElement
-            w, h = int(root.getAttribute("width")), int(root.getAttribute("height"))
-            sizes = font_sizes(svg)
-            scale = PHONE_WIDTH / w
-            print(
-                f"| {theme} {layout} | {w} x {h} | {len(svg.encode()):,} | "
-                f"{min(sizes) * scale:.1f} px | {max(sizes) * scale:.1f} px | "
-                f"{render_ms(stats, username, theme, layout):.2f} |"
-            )
+    variants = [
+        (style, theme, layout)
+        for style, layouts in (
+            ("classic", card.LAYOUTS),
+            ("flat", ("wide", card.PHONE)),
+        )
+        for theme in ("dark", "light")
+        for layout in layouts
+    ]
+    for style, theme, layout in variants:
+        accent = card.THEMES[theme].accent
+        svg = (
+            card.render_card(stats, username, title, accent, theme, layout, style)
+            + "\n"
+        )
+        root = xml.dom.minidom.parseString(svg).documentElement
+        w, h = int(root.getAttribute("width")), int(root.getAttribute("height"))
+        sizes = font_sizes(svg)
+        scale = PHONE_WIDTH / w
+        name = f"{theme} {layout}" if style == "classic" else f"flat {theme} {layout}"
+        print(
+            f"| {name} | {w} x {h} | {len(svg.encode()):,} | "
+            f"{min(sizes) * scale:.1f} px | {max(sizes) * scale:.1f} px | "
+            f"{render_ms(stats, username, theme, layout, style):.2f} |"
+        )
 
 
 def live(username: str) -> None:

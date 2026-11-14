@@ -710,3 +710,341 @@ def test_committed_example_is_valid_svg() -> None:
 
     assert root.tagName == "svg"
     assert root.getAttribute("role") == "img"
+
+
+# ---------------------------------------------------------------- flat style
+
+FLAT_LAYOUTS = ("wide", card.PHONE)
+CLOCK = {2, 3, 4, 6, 12, 24}  # every loop lasts one of these, in seconds
+
+
+def flat(
+    layout: str = "wide", theme: str = "dark", stats: dict = STATS, title: str = "t"
+) -> str:
+    accent = card.THEMES[theme].accent
+    return card.render_card(stats, "octocat", title, accent, theme, layout, "flat")
+
+
+def animations(root: xml.dom.minidom.Element) -> list[xml.dom.minidom.Element]:
+    return root.getElementsByTagName("animate") + root.getElementsByTagName(
+        "animateTransform"
+    )
+
+
+def cells(root: xml.dom.minidom.Element) -> list[xml.dom.minidom.Element]:
+    return [r for r in root.getElementsByTagName("rect") if r.getAttribute("rx") == "2"]
+
+
+def begin(animation: xml.dom.minidom.Element) -> float:
+    """When an entrance starts: it holds its first value until its second key time."""
+    hold = float(animation.getAttribute("keyTimes").split(";")[1])
+    return hold * float(animation.getAttribute("dur").removesuffix("s"))
+
+
+@pytest.mark.parametrize("layout", card.LAYOUTS)
+@pytest.mark.parametrize("theme", card.THEMES)
+def test_classic_is_the_default_style(theme: str, layout: str) -> None:
+    accent = card.THEMES[theme].accent
+
+    default = card.render_card(STATS, "octocat", "t", accent, theme, layout)
+
+    assert default == card.render_card(
+        STATS, "octocat", "t", accent, theme, layout, "classic"
+    )
+
+
+def test_main_without_a_style_writes_the_classic_card(
+    action_env: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _ = action_env
+    serve(monkeypatch, reply([]), reply([]))
+
+    card.main()
+
+    stats = card.fetch_stats("octocat", "t", 6, set())
+    classic = card.render_card(
+        stats,
+        "octocat",
+        "GITHUB | @OCTOCAT",
+        card.BLUE_LIGHT,
+        "dark",
+        "wide",
+        "classic",
+    )
+    assert output.read_text(encoding="utf-8") == classic + "\n"
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+def test_flat_card_is_poster_safe(layout: str) -> None:
+    root = parse(flat(layout))
+
+    # nothing starts hidden, so a still render is the finished card
+    for node in root.getElementsByTagName("*"):
+        assert node.getAttribute("opacity") in ("", "1"), node.tagName
+    entrances = [a for a in animations(root) if not a.getAttribute("repeatCount")]
+    assert entrances
+    for animation in animations(root):
+        assert not animation.getAttribute("begin")
+    for animation in entrances:
+        # runs from 0 s holding its start value, then rests on the element's own value
+        values = animation.getAttribute("values").split(";")
+        assert animation.getAttribute("fill") == "freeze"
+        assert animation.getAttribute("keyTimes").startswith("0;")
+        assert values[0] == values[1]
+        assert values[-1] in ("1", "0 0")
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+def test_flat_loops_run_on_the_page_clock(layout: str) -> None:
+    root = parse(flat(layout))
+
+    loops = [a for a in animations(root) if a.getAttribute("repeatCount")]
+
+    assert loops
+    for animation in loops:
+        assert animation.getAttribute("repeatCount") == "indefinite"
+        assert float(animation.getAttribute("dur").removesuffix("s")) in CLOCK
+
+
+@pytest.mark.parametrize(("layout", "floor"), [("wide", 10.5), (card.PHONE, 11.5)])
+def test_flat_text_is_never_under_the_floor(layout: str, floor: float) -> None:
+    root = parse(flat(layout))
+
+    sizes = [
+        float(t.getAttribute("font-size")) for t in root.getElementsByTagName("text")
+    ]
+
+    assert min(sizes) == floor
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+def test_flat_card_is_flat_and_self_contained(layout: str) -> None:
+    svg = flat(layout)
+
+    for banned in (
+        "Gradient",
+        "<filter",
+        "blur",
+        "shadow",
+        "<pattern",
+        "<mask",
+        "@keyframes",
+        "<script",
+        "<image",
+        "<foreignObject",
+        "href",
+    ):
+        assert banned not in svg, banned
+    assert svg.count("http") == 1  # the xmlns, nothing fetched
+    assert parse(svg).getAttribute("role") == "img"
+
+
+def test_phone_layout_is_the_flat_320_px_card() -> None:
+    phone = flat(card.PHONE)
+
+    assert parse(phone).getAttribute("width") == "320"
+    # it has no classic version, and style: flat with layout: compact draws it too
+    assert phone == card.render_card(
+        STATS, "octocat", "t", card.BLUE_LIGHT, layout=card.PHONE
+    )
+    assert phone == flat("compact")
+
+
+def test_flat_wide_calendar_enters_one_column_at_a_time() -> None:
+    root = parse(flat())
+
+    columns = [
+        g
+        for g in root.getElementsByTagName("g")
+        if any(
+            c.nodeName == "rect" and c.getAttribute("rx") == "2" for c in g.childNodes
+        )
+    ]
+    starts = [begin(column.firstChild) for column in columns]
+    animated = {a.parentNode for a in animations(root)}
+
+    assert root.getAttribute("width") == "840"
+    assert len(cells(root)) == 52 * 7 + 3
+    assert len(columns) == len(CALENDAR)
+    assert starts == sorted(starts)
+    assert len(set(starts)) == len(columns)
+    assert round(max(starts), 3) <= 1.2
+    # one entrance per week, not per day: 376 animated elements on the classic card
+    assert len(animated) <= len(CALENDAR) + 12
+
+
+def test_flat_wide_calendar_fits_a_54_week_year() -> None:
+    root = parse(flat(stats={**STATS, "calendar": [[1] * 7 for _ in range(54)]}))
+
+    right = max(
+        float(r.getAttribute("x")) + float(r.getAttribute("width")) for r in cells(root)
+    )
+
+    assert len(cells(root)) == 54 * 7
+    assert right <= 840 - 24
+
+
+def test_phone_card_shows_the_last_20_weeks_and_the_reach_line() -> None:
+    root = parse(flat(card.PHONE))
+
+    texts = [t.firstChild.data for t in root.getElementsByTagName("text")]
+
+    assert len(cells(root)) == 19 * 7 + 3
+    assert "LAST 20 WEEKS" in texts
+    assert "7 total stars \u00b7 42 followers" in texts
+    for label in ("CONTRIBUTIONS", "ACTIVE DAYS", "CURRENT STREAK", "LONGEST STREAK"):
+        assert label in texts
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+@pytest.mark.parametrize("theme", card.THEMES)
+def test_flat_card_meets_contrast_on_every_theme(theme: str, layout: str) -> None:
+    palette = card.THEMES[theme]
+    stats = {**STATS, "languages": STATS["languages"] + DARK_LANGUAGES}
+
+    root = parse(flat(layout, theme, stats))
+
+    assert root.getElementsByTagName("rect")[0].getAttribute("fill") == palette.bg
+    marks = root.getElementsByTagName("rect") + root.getElementsByTagName("circle")
+    solid = {m.getAttribute("fill") for m in marks} - {palette.bg, palette.card}
+    solid = {fill for fill in solid if card.HEX_COLOR.fullmatch(fill)}
+    assert solid
+    for fill in solid:
+        assert card.contrast(fill, palette.bg) >= card.GRAPHIC_MIN, fill
+    # the accent (the title and the headings) sits on the card background only
+    title = root.getElementsByTagName("text")[0].getAttribute("fill")
+    assert card.contrast(title, palette.bg) >= card.TEXT_MIN
+    for fill in text_fills(root) - {title}:
+        if card.HEX_COLOR.fullmatch(fill):
+            assert card.contrast(fill, palette.bg) >= card.TEXT_MIN, fill
+            assert card.contrast(fill, palette.card) >= card.TEXT_MIN, fill
+
+
+@pytest.mark.parametrize("theme", card.THEMES)
+def test_flat_lead_tile_label_reaches_4_5_to_1_on_its_tint(theme: str) -> None:
+    palette = card.THEMES[theme]
+    root = parse(flat("wide", theme))
+
+    lead = next(
+        r
+        for r in root.getElementsByTagName("rect")
+        if r.getAttribute("rx") == "10" and r.getAttribute("fill").startswith("rgba(")
+    )
+    label = lead.parentNode.getElementsByTagName("text")[1].getAttribute("fill")
+    *rgb, alpha = lead.getAttribute("fill").removeprefix("rgba(").rstrip(")").split(",")
+    under = card.mix(
+        palette.bg, "#" + "".join(f"{int(c):02x}" for c in rgb), float(alpha)
+    )
+
+    if card.HEX_COLOR.fullmatch(label):
+        assert card.contrast(label, under) >= card.TEXT_MIN, label
+    assert card.contrast(lead.getAttribute("stroke"), palette.bg) >= card.GRAPHIC_MIN
+
+
+def test_flat_streak_is_green_only_while_it_is_live() -> None:
+    live = flat()
+    broken = flat(stats={**STATS, "streak": 0})
+
+    assert "8 DAY STREAK" in live
+    assert f'fill="{card.GREEN}"' in live
+    assert "0 DAY STREAK" in broken
+    assert card.GREEN not in broken
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+def test_flat_title_is_escaped_and_cut_to_fit(layout: str) -> None:
+    title = "</text><script>x</script>" + "A" * 200
+
+    root = parse(flat(layout, title=title))
+
+    first = root.getElementsByTagName("text")[0]
+    drawn = first.firstChild.data
+    right = float(first.getAttribute("x")) + card.mono_width(
+        drawn, float(first.getAttribute("font-size"))
+    )
+    assert root.getElementsByTagName("script") == []
+    assert drawn.startswith("</text><script>x</script>A")
+    assert drawn.endswith("...")
+    assert right <= int(root.getAttribute("width")) - 18
+
+
+def test_flat_tile_numeral_steps_down_to_fit_its_tile() -> None:
+    root = parse(flat(card.PHONE, stats={**STATS, "contributions": 123456789}))
+
+    value = next(
+        t
+        for t in root.getElementsByTagName("text")
+        if t.firstChild.data == "123,456,789"
+    )
+    size = float(value.getAttribute("font-size"))
+
+    assert 16 <= size < 22
+    assert card.sans_width("123,456,789", size) <= (320 - 36 - 10) / 2 - 24
+
+
+@pytest.mark.parametrize("layout", FLAT_LAYOUTS)
+def test_flat_card_renders_with_no_calendar_or_languages(layout: str) -> None:
+    root = parse(flat(layout, stats={**STATS, "calendar": [], "languages": []}))
+
+    assert root.getAttribute("role") == "img"
+    assert cells(root) == []
+
+
+def test_main_renders_the_style_input(
+    action_env: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _ = action_env
+    monkeypatch.setenv("INPUT_STYLE", "Flat")
+    serve(monkeypatch, reply([]), reply([]))
+
+    card.main()
+    wide = parse(output.read_text(encoding="utf-8"))
+    monkeypatch.setenv("INPUT_LAYOUT", "phone")
+    card.main()
+    phone = parse(output.read_text(encoding="utf-8"))
+
+    assert wide.getAttribute("width") == "840"
+    assert phone.getAttribute("width") == "320"
+    assert wide.getElementsByTagName("rect")[0].getAttribute("stroke") == (
+        card.FLAT_DARK.border
+    )
+
+
+@pytest.mark.parametrize("value", ["glass", "flatter"])
+def test_main_rejects_a_bad_style_before_calling_the_api(
+    action_env: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("INPUT_STYLE", value)
+    requests = serve(monkeypatch)
+
+    with pytest.raises(SystemExit) as exc:
+        card.main()
+
+    assert exc.value.code == 1
+    assert requests == []
+
+
+def test_fetch_stats_returns_the_stars_of_each_counted_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    serve(monkeypatch, reply([repo("Keep", 5), repo("dotfiles", 50), repo("zero", 0)]))
+
+    stats = card.fetch_stats("octocat", "t", 6, {"dotfiles"})
+
+    assert stats["repo_stars"] == {"Keep": 5, "zero": 0}
+    assert stats["stars"] == sum(stats["repo_stars"].values())
+
+
+def test_committed_flat_examples_match_the_snapshot() -> None:
+    examples = load_render_examples()
+
+    files = examples.render_flat(examples.load_snapshot())
+
+    assert sorted(path.name for path in files) == [
+        "flat-light-phone.svg",
+        "flat-light.svg",
+        "flat-phone.svg",
+        "flat.svg",
+    ]
+    for path, svg in files.items():
+        assert path.read_text(encoding="utf-8") == svg, path.name

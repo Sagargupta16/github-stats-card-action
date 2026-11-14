@@ -55,6 +55,21 @@ def render_all(snapshot: dict) -> dict[Path, str]:
     return files
 
 
+def render_flat(snapshot: dict) -> dict[Path, str]:
+    """The style: flat examples: the wide card and the phone card, dark and light."""
+    stats, username = snapshot["stats"], snapshot["username"]
+    title = f"GITHUB | @{username.upper()}"
+    files = {}
+    for theme, name in (("dark", "flat"), ("light", "flat-light")):
+        accent = card.THEMES[theme].accent
+        for layout, suffix in (("wide", ""), (card.PHONE, "-phone")):
+            svg = card.render_card(
+                stats, username, title, accent, theme, layout, "flat"
+            )
+            files[GALLERY / f"{name}{suffix}.svg"] = svg + "\n"
+    return files
+
+
 def refresh(username: str) -> None:
     if not GITHUB_LOGIN.fullmatch(username):
         raise SystemExit(f"--refresh: {username!r} is not a GitHub username")
@@ -85,7 +100,8 @@ def main() -> None:
 
     if args.refresh:
         refresh(args.refresh)
-    files = render_all(load_snapshot())
+    snapshot = load_snapshot()
+    files = {**render_all(snapshot), **render_flat(snapshot)}
     if args.check:
         stale = [
             path

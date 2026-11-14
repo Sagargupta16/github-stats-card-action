@@ -27,7 +27,7 @@ To render a card by hand, pass a token inline and never echo it:
 GITHUB_TOKEN=$(gh auth token) INPUT_USERNAME=<login> INPUT_OUTPUT=card.svg python github_stats_card.py
 ```
 
-Without `INPUT_OUTPUT` the script writes `assets/github-stats.svg`. Do not commit either file. Add `INPUT_THEME=light` or `INPUT_LAYOUT=compact` to try the other variants.
+Without `INPUT_OUTPUT` the script writes `assets/github-stats.svg`. Do not commit either file. Add `INPUT_THEME=light` or `INPUT_LAYOUT=compact` to try the other variants, `INPUT_STYLE=flat` for the flat style and `INPUT_LAYOUT=phone` for its phone card.
 
 If your change alters the card, regenerate the README preview and the gallery. They render offline from the committed `examples/stats-snapshot.json`, so no token is needed:
 
