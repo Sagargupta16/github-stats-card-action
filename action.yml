@@ -24,9 +24,13 @@ inputs:
     required: false
     default: "dark"
   layout:
-    description: "wide (840 px, the full year) or compact (400 px, the last 26 weeks, for phones)"
+    description: "wide (840 px, the full year), compact (400 px, the last 26 weeks, for phones) or phone (320 px, the last 20 weeks, always in the flat style)"
     required: false
     default: "wide"
+  style:
+    description: "classic (the card as in 1.3) or flat (flat tiles and hairlines, mono labels, a still frame that shows the whole card); with flat, compact draws the phone card"
+    required: false
+    default: "classic"
   accent:
     description: "Hex color for the title and the contribution calendar; empty means the theme's accent"
     required: false
@@ -72,6 +76,7 @@ runs:
         INPUT_OUTPUT: ${{ inputs.output }}
         INPUT_THEME: ${{ inputs.theme }}
         INPUT_LAYOUT: ${{ inputs.layout }}
+        INPUT_STYLE: ${{ inputs.style }}
         INPUT_ACCENT: ${{ inputs.accent }}
         INPUT_TITLE: ${{ inputs.title }}
         INPUT_LANGUAGES: ${{ inputs.languages }}

@@ -92,3 +92,24 @@ jobs:
           assert background == "#ffffff", background
           print("Compact light card parses, 400 px wide on #ffffff")
           PY
+
+      - name: Run the action again with the style input and the phone layout
+        uses: ./
+        with:
+          username: Sagargupta16
+          token: ${{ github.token }}
+          style: flat
+          layout: phone
+          output: assets/github-stats-phone.svg
+
+      - name: Assert the phone card is the flat 320 px card
+        run: |
+          set -euo pipefail
+          python - assets/github-stats-phone.svg <<'PY'
+          import sys, xml.dom.minidom
+          root = xml.dom.minidom.parse(sys.argv[1]).documentElement
+          border = root.getElementsByTagName("rect")[0].getAttribute("stroke")
+          assert root.getAttribute("width") == "320", root.getAttribute("width")
+          assert border == "rgba(255,255,255,0.09)", border
+          print("Phone card parses, 320 px wide with the flat hairline")
+          PY

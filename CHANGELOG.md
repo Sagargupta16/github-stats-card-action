@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-11-14
+
+A flat style and a 320 px phone card, both opt-in. With no new inputs set, every
+theme and layout renders byte-identical to 1.3.0 (961 renders compared against
+1.3.0 over five data sets, six themes, two layouts, eight accents and two titles).
+
+### Added
+
+- `style` input: `classic` (default, the card as in 1.3.0) or `flat`, the look of the profile README the card comes from. Cards and tiles have one fill and one hairline border, with no gradient or glow; labels are mono at 10.5 px, numerals and language names sans. The current streak sits beside the title, green with a pulsing dot while it is live. Every entrance holds its start value from 0 s and rests on the element's own attributes, so a still frame (a link preview, a viewer without SMIL) shows the whole card where the classic card shows empty tiles and an empty calendar.
+- The flat wide card's calendar enters one week at a time: 65 animated elements where the classic card has 371 (svg-forge's count). A column outline steps across the year once every 12 s and the busiest day ripples every 2 s; every loop lasts 2 or 12 s.
+- `layout: phone`: a 320 px card with six tiles of the past 12 months, the last 20 weeks of the calendar, total stars and followers on one line, and the top languages, with no label under 11.5 px. It exists only in the flat style, so it is drawn flat whatever `style` says, and `style: flat` with `layout: compact` draws it too.
+- `fetch_stats()` returns `repo_stars`, the stars of each counted repository by name, from the same paginated query. The card does not draw it; the profile README's vendored copy had added it locally.
+- `examples/gallery/flat.svg`, `flat-phone.svg`, `flat-light.svg` and `flat-light-phone.svg`, rendered from the snapshot like the other examples. All 18 report 0 errors under svg-forge's `validate_svg.py --strict-contrast`.
+- CI runs the action a third time with `style: flat` and `layout: phone` and asserts the 320 px flat card.
+
+### Documentation
+
+- README: the `style` input and the `phone` layout, a Flat style section, a `<picture>` embed with the 840 px card in a `(min-width: 1012px)` source and the phone card as the `<img>`, and the flat rows in the Measured table.
+
 ## [1.3.0] - 2026-10-25
 
 Larger labels on the wide card. The wide layout keeps every theme, input and
@@ -84,6 +103,8 @@ Initial release. The card design comes from the stats card on
 - Self-contained SVG (no scripts, external fonts or images), with every user-supplied string HTML-escaped.
 - CI: ruff, pytest on Python 3.12, 3.13 and 3.14, and a job that runs `action.yml` against live data.
 
+[1.4.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.4.0
+[1.3.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Sagargupta16/github-stats-card-action/releases/tag/v1.1.0

@@ -9,7 +9,7 @@ A GitHub Action that renders an animated GitHub stats card as an SVG file in you
 
 <img src="examples/github-stats.svg" alt="GitHub stats card for @Sagargupta16" width="100%">
 
-Real data for [@Sagargupta16](https://github.com/Sagargupta16), fetched 2026-10-18 into [examples/stats-snapshot.json](examples/stats-snapshot.json). Six themes and a compact phone layout are in the [gallery](#themes-and-layouts).
+Real data for [@Sagargupta16](https://github.com/Sagargupta16), fetched 2026-10-18 into [examples/stats-snapshot.json](examples/stats-snapshot.json). Six themes and a compact phone layout are in the [gallery](#themes-and-layouts), and the flat style with its 320 px phone card is under [Flat style](#flat-style).
 
 Public stats-widget hosts serve everyone from shared API quotas, and when a quota runs out your README shows an error instead of your stats. This action renders the card in your own workflow, with your own token, and commits a plain file that GitHub serves like any other file in your repo.
 
@@ -95,6 +95,17 @@ The wide card is 840 px and scales down with `width="100%"`. With the four varia
 </picture>
 ```
 
+With the flat style, put the 840 px card in a `(min-width: 1012px)` source and the phone card in the `<img>`:
+
+```html
+<picture>
+  <source media="(min-width: 1012px)" srcset="assets/github-stats.svg">
+  <img src="assets/github-stats-phone.svg" alt="GitHub stats" width="100%">
+</picture>
+```
+
+The breakpoint follows GitHub's README column, not the screen: from 768 px to 1011 px the profile sidebar leaves the README 383 to 626 px, where the 840 px card would shrink to half size. Clients without `<picture>`, such as GitHub's mobile app, show the `<img>`, which is the phone card.
+
 Why the compact layout exists, in a 375 px phone viewport ([scripts/screenshot_phone.py](scripts/screenshot_phone.py)):
 
 <img src="docs/phone-wide-vs-compact.webp" alt="The wide card scaled down to a phone column next to the compact card" width="320">
@@ -107,7 +118,8 @@ Why the compact layout exists, in a 375 px phone viewport ([scripts/screenshot_p
 | `token` | `${{ github.token }}` | Token for the GraphQL API. The default is enough; see [Limits](#limits) |
 | `output` | `assets/github-stats.svg` | Path of the SVG, relative to the workspace. Missing folders are created |
 | `theme` | `dark` | Color preset: `dark`, `dim`, `light`, `dracula`, `nord` or `solarized-light`. See [Themes and layouts](#themes-and-layouts) |
-| `layout` | `wide` | `wide`: 840 px, the full year. `compact`: 400 px, the last 26 weeks, six tiles in a 3 by 2 grid with the streak as the sixth, no text under 9 px |
+| `layout` | `wide` | `wide`: 840 px, the full year. `compact`: 400 px, the last 26 weeks, six tiles in a 3 by 2 grid with the streak as the sixth, no text under 9 px. `phone`: 320 px, the last 20 weeks, no label under 11.5 px, always drawn in the flat style |
+| `style` | `classic` | `classic`: the card as in 1.3, unchanged. `flat`: the flat look described under [Flat style](#flat-style). With `flat`, `compact` draws the 320 px phone card |
 | `accent` | the theme's accent | Hex color (`#rrggbb` or `rrggbb`) for the title and the contribution calendar. A color that is hard to read on the theme's background is moved to the nearest shade of the same hue that reaches 4.5:1 (lighter on a dark theme, darker on a light one). Quote it in YAML, where `#` starts a comment: `accent: "#f59e0b"` |
 | `title` | `GITHUB \| @<USERNAME>` | Card title, rendered as given |
 | `languages` | `6` | How many top languages to show, three per legend row. Past six, the wide card grows 20 px per extra row; the compact card has two per row and grows 20 px per row past the first |
@@ -141,19 +153,52 @@ Every preset goes through the same contrast pass as a custom accent, so a palett
 
 Every theme also has a compact file in [examples/gallery/](examples/gallery/), plus `dark-amber.svg` with `accent: "#f59e0b"`. All of them render offline from the snapshot with `python scripts/render_examples.py`, and a test fails if a committed file drifts from what the code renders.
 
+## Flat style
+
+`style: flat` draws the card in the look of the [profile README](https://github.com/Sagargupta16/Sagargupta16) it comes from. The default stays `classic`, so a workflow on `@v1` renders the same file as before.
+
+<img src="examples/gallery/flat.svg" alt="flat style, wide card" width="100%">
+
+<img src="examples/gallery/flat-phone.svg" alt="flat style, phone card" width="320">
+
+- Flat cards and tiles: one fill and one hairline border, no gradient or glow. Mono labels at 10.5 px on the 840 px card and 11.5 px on the 320 px phone card, sans for numerals and language names.
+- A still frame shows the whole card. Every entrance holds its start value from 0 s until its turn and rests on the element's own attributes, so a link preview or a viewer without SMIL animation gets the finished card instead of an empty one.
+- The wide card's calendar enters one week at a time: 53 column entrances where the classic card animates each of its 371 days. A column outline rests on this week and steps across the year once every 12 s, and the busiest day ripples every 2 s.
+- The current streak sits beside the title, green with a pulsing dot while it is live and gray at 0.
+- The phone card (`layout: phone`) has six tiles of the past 12 months, the last 20 weeks, total stars and followers on one line, and the top languages.
+- `theme` and `accent` work as on the classic card, through the same contrast pass. GitHub's language colors are kept.
+
+Add one step per card and embed them with the `<picture>` in [Embed](#embed):
+
+```yaml
+      - uses: Sagargupta16/github-stats-card-action@v1
+        with:
+          style: flat
+      - uses: Sagargupta16/github-stats-card-action@v1
+        with:
+          layout: phone
+          output: assets/github-stats-phone.svg
+```
+
+`examples/gallery/flat-light.svg` and `flat-light-phone.svg` show `theme: light`.
+
 ## Measured
 
 From [scripts/measure.py](scripts/measure.py) on the 2026-10-18 snapshot (Python 3.13 on a Windows laptop; render time is the median of 50 renders). "At 360 px" is the on-screen size when the card is drawn 360 px wide, a phone-width README column.
 
 | Variant | Size (px) | SVG bytes | Smallest text at 360 px | Stat values at 360 px | Render (median ms) |
 | --- | --- | --- | --- | --- | --- |
-| dark wide | 840 x 340 | 37,653 | 4.5 px | 9.4 px | 1.07 |
-| dark compact | 400 x 416 | 22,034 | 8.1 px | 18.0 px | 0.98 |
-| light wide | 840 x 340 | 37,233 | 4.5 px | 9.4 px | 2.61 |
-| light compact | 400 x 416 | 21,644 | 8.1 px | 18.0 px | 2.44 |
+| dark wide | 840 x 340 | 37,653 | 4.5 px | 9.4 px | 1.10 |
+| dark compact | 400 x 416 | 22,034 | 8.1 px | 18.0 px | 0.96 |
+| light wide | 840 x 340 | 37,233 | 4.5 px | 9.4 px | 2.67 |
+| light compact | 400 x 416 | 21,644 | 8.1 px | 18.0 px | 2.43 |
+| flat dark wide | 840 x 384 | 42,320 | 4.5 px | 11.1 px | 1.49 |
+| flat dark phone | 320 x 553 | 18,434 | 12.9 px | 24.8 px | 1.06 |
+| flat light wide | 840 x 384 | 41,943 | 4.5 px | 11.1 px | 2.97 |
+| flat light phone | 320 x 553 | 18,095 | 12.9 px | 24.8 px | 2.62 |
 
 - One live run for @Sagargupta16 (`--live`) made 1 GraphQL request and took 4.18 s to fetch; only accounts with more than 100 owned public repositories need a second page.
-- All 14 example SVGs report 0 errors under svg-forge's `validate_svg.py --strict-contrast`.
+- All 18 example SVGs report 0 errors under svg-forge's `validate_svg.py --strict-contrast`.
 
 ## Why not a hosted widget
 
@@ -177,7 +222,7 @@ From [scripts/measure.py](scripts/measure.py) on the 2026-10-18 snapshot (Python
 The spec behind the picture is [`docs/diagrams/how-it-works.yaml`](docs/diagrams/how-it-works.yaml), rendered with [orrery](https://github.com/Sagargupta16/orrery).
 
 1. The script queries the GitHub GraphQL API for the user's followers, contribution calendar and totals for the last year, and the public, non-fork repositories they own with their stars and top 10 languages by size, 100 repositories per request.
-2. It renders the card: five stat tiles; the contribution calendar, one column per week, fading in left to right; current streak, longest streak and active days; and a stacked bar of the top languages by code size, with a legend.
+2. It renders the card: five stat tiles; the contribution calendar, one column per week, fading in left to right; current streak, longest streak and active days; and a stacked bar of the top languages by code size, with a legend. `style: flat` and `layout: phone` draw the same facts in the [flat style](#flat-style).
 3. It writes the SVG to `output` and sets the outputs. Your workflow commits the file.
 
 Details:
@@ -206,7 +251,7 @@ Details:
 - Languages are ranked by bytes of code, summed over the top 10 languages GitHub detects in each repository.
 - github.com only; GitHub Enterprise Server is not supported.
 - The card names its fonts with system fallbacks instead of embedding them, so text widths vary slightly between viewers.
-- The wide card is a fixed 840 px layout that scales down as a whole. Shown 360 px wide, its smallest text is 4.5 px on screen, which a phone cannot show legibly. Use `layout: compact` (8.1 px at the same width) for phones, through the `<picture>` pattern in [Embed](#embed).
+- The wide card is a fixed 840 px layout that scales down as a whole. Shown 360 px wide, its smallest text is 4.5 px on screen, which a phone cannot show legibly. Use `layout: compact` (8.1 px at the same width) or `layout: phone` (12.9 px) for phones, through the `<picture>` patterns in [Embed](#embed).
 - The compact card shows the last 26 weeks of the calendar, and its shading is cut at the quartiles of those weeks. The longest streak and active days still cover the full year, as its `/ YEAR` label says, and so does the `CONTRIBUTIONS` tile: it is the same last-year total as on the wide card, not a 26 week count.
 - The action runs `actions/setup-python` with Python 3.13 in your job, and that Python stays first on `PATH` for the steps after it. If a later step needs another version, give it its own `setup-python` step.
 
